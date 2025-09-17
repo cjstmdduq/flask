@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>플라스크 - 매출·광고·할인 종합분석</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        /* 플라스크 - 베이직한 그레이스케일 대시보드 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-weight: 400;
+            background-color: #fafafa;
+            color: #2d3748;
+            line-height: 1.5;
+        }
+
+        /* 네비게이션 */
+        .navbar {
+            padding: 1rem 0;
+            border-bottom: 1px solid #e2e8f0;
+            background-color: white;
+        }
+
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: #1a202c !important;
+            letter-spacing: -0.025em;
+        }
+
+        .navbar-brand i {
+            width: 24px;
+            height: 24px;
+            color: #4a5568;
+        }
+
+        /* 버튼 스타일 - 베이직 */
+        .btn {
+            font-weight: 400;
+            border-radius: 6px;
+            padding: 0.5rem 1rem;
+            border: 1px solid #d1d5db;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.875rem;
+            background-color: white;
+            color: #374151;
+        }
+
+        .btn i {
+            width: 16px;
+            height: 16px;
+        }
+
+        .btn:hover {
+            background-color: #f9fafb;
+            border-color: #9ca3af;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-primary {
+            background-color: #374151;
+            border-color: #374151;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1f2937;
+            border-color: #1f2937;
+            color: white;
+        }
+
+        /* 카드 기본 스타일 - 베이직 */
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: none;
+            background: white;
+            transition: none;
+        }
+
+        .card:hover {
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transform: none;
+        }
+
+        .card-header {
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 1rem 1.25rem;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .card-header h5 {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .card-header h5 i {
+            width: 16px;
+            height: 16px;
+            color: #6b7280;
+            margin-right: 0.5rem;
+        }
+
+        .card-body {
+            padding: 1.25rem;
+        }
+
+        /* 계산기 전용 스타일 */
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .metric-item:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            font-weight: 400;
+        }
+
+        .metric-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1f2937;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+        }
+
+        .summary-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            font-weight: 400;
+        }
+
+        .summary-value {
+            font-size: 0.875rem;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        /* 폼 스타일 개선 */
+        .form-text {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-top: 0.25rem;
+        }
+
+        /* 결과 컨테이너 */
+        #resultsContainer {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 웰컴 메시지 */
+        #welcomeMessage {
+            background-color: #f9fafb;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        /* 입력 폼 개선 */
+        .form-control:focus {
+            border-color: #6b7280;
+            box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.1);
+        }
+
+        /* 섹션 제목 */
+        h6.text-muted {
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        /* 공식 설명 스타일 */
+        .formula-text {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            font-style: italic;
+            margin-top: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            background-color: #f9fafb;
+            border-radius: 4px;
+            border-left: 3px solid #d1d5db;
+        }
+
+        .metric-label.formula-text {
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+            font-style: italic;
+            color: #9ca3af;
+        }
+
+        .text-primary { color: #374151 !important; }
+        .text-danger { color: #dc2626 !important; }
+        .text-warning { color: #d97706 !important; }
+        .text-success { color: #059669 !important; }
+
+        /* 보고서 추출 버튼 호버 효과 */
+        #exportReportBtn:hover {
+            background-color: #1f2937 !important;
+            border-color: #1f2937 !important;
+            color: white !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        #exportReportBtn:hover i {
+            color: white !important;
+        }
+
+        .form-control {
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            transition: border-color 0.15s ease;
+            background-color: white;
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .alert {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            background-color: #f9fafb;
+            color: #4b5563;
+        }
+
+        .alert-danger {
+            background-color: #fef2f2;
+            color: #b91c1c;
+            border-color: #fecaca;
+        }
+
+        .alert-success {
+            background-color: #f0fdf4;
+            color: #166534;
+            border-color: #bbf7d0;
+        }
+
+        .container-fluid {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-light bg-white border-bottom">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i data-lucide="flask" class="me-2"></i>플라스크
+            </span>
+            <div class="d-flex">
+                <span class="text-muted small">매출·광고·할인 종합분석</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- 입력 폼 -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i data-lucide="calculator" class="me-2"></i>데이터 입력</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="analysisForm">
+                            <!-- 집계기간 설정 -->
+                            <div class="mb-4">
+                                <h6 class="text-muted mb-3">집계기간</h6>
+                                <div class="mb-3">
+                                    <label for="start_date" class="form-label">시작일</label>
+                                    <input type="date" class="form-control" id="start_date" name="start_date">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="end_date" class="form-label">종료일</label>
+                                    <input type="date" class="form-control" id="end_date" name="end_date">
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-text">기본값: 어제부터 14일간 (예: 오늘이 9/17이면 9/3~9/16)</div>
+                                </div>
+                            </div>
+
+                            <!-- 매출정보 -->
+                            <div class="mb-4">
+                                <h6 class="text-muted mb-3">매출정보</h6>
+                                <div class="mb-3">
+                                    <label for="sales_amount" class="form-label">매출액 (원)</label>
+                                    <input type="number" class="form-control" id="sales_amount" name="sales_amount" placeholder="0" min="0" step="0.01">
+                                    <div class="form-text">총 판매 금액 (고객이 지불한 전체 금액)</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="refund_amount" class="form-label">환불금액 (원)</label>
+                                    <input type="number" class="form-control" id="refund_amount" name="refund_amount" placeholder="0" min="0" step="0.01">
+                                    <div class="form-text">고객에게 환불한 총 금액</div>
+                                </div>
+                            </div>
+
+                            <!-- 할인정보 -->
+                            <div class="mb-4">
+                                <h6 class="text-muted mb-3">할인정보</h6>
+                                <div class="mb-3">
+                                    <label for="total_discount" class="form-label">총할인액 (원)</label>
+                                    <input type="number" class="form-control" id="total_discount" name="total_discount" placeholder="0" min="0" step="0.01">
+                                    <div class="form-text">상품에 적용된 총 할인 금액 (쿠폰, 프로모션 등)</div>
+                                </div>
+                            </div>
+
+                            <!-- 광고정보 -->
+                            <div class="mb-4">
+                                <h6 class="text-muted mb-3">광고정보</h6>
+                                <div class="mb-3">
+                                    <label for="advertising_cost" class="form-label">광고실비 (원)</label>
+                                    <input type="number" class="form-control" id="advertising_cost" name="advertising_cost" placeholder="0" min="0" step="0.01">
+                                    <div class="form-text">광고 플랫폼에 지출한 총 광고비 (Google, Facebook, Naver 등)</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="target_ratio" class="form-label">목표 광고비율 (%)</label>
+                                    <input type="number" class="form-control" id="target_ratio" name="target_ratio" placeholder="10" min="0" max="100" step="0.01" value="10">
+                                    <div class="form-text">기본값: 10% (하한선 7.5%, 상한선 15%) - 보정광고비율 계산에 사용</div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-column align-items-center gap-3">
+                                <button type="submit" class="btn btn-primary w-100 d-flex align-items-center justify-content-center" style="height: 50px; font-size: 16px; font-weight: 500;">
+                                    <i data-lucide="play" class="me-2"></i>분석 계산
+                                </button>
+                                <button type="button" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center" id="exportReportBtn" style="display: none; height: 50px; font-size: 16px; font-weight: 500;" onclick="exportReport()">
+                                    <i data-lucide="file-text" class="me-2"></i>보고서 추출
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 결과 표시 -->
+            <div class="col-md-8">
+                <div id="resultsContainer" style="display: none;">
+                    <!-- 매출정보 결과 -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5><i data-lucide="trending-up" class="me-2"></i>매출정보</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="metric-item">
+                                        <span class="metric-label">매출액</span>
+                                        <span class="metric-value" id="sales_amount_result">₩0</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">환불금액</span>
+                                        <span class="metric-value text-danger" id="refund_amount_result">₩0</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">환불비율</span>
+                                        <span class="metric-value" id="refund_ratio_result">0%</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label formula-text">환불비율 = 환불금액 ÷ 매출액</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="metric-item">
+                                        <span class="metric-label">순매출액</span>
+                                        <span class="metric-value text-primary" id="net_sales_result">₩0</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label formula-text">순매출액 = 매출액 - 환불금액</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">일평균 순매출</span>
+                                        <span class="metric-value" id="daily_avg_net_sales_result">₩0</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label formula-text">일평균 = 순매출액 ÷ 총 일수</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 할인정보 결과 -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5><i data-lucide="percent" class="me-2"></i>할인정보</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="metric-item">
+                                        <span class="metric-label">총할인액</span>
+                                        <span class="metric-value" id="total_discount_result">₩0</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="metric-item">
+                                        <span class="metric-label">실할인액</span>
+                                        <span class="metric-value text-warning" id="effective_discount_result">₩0</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="metric-item">
+                                        <span class="metric-label">실할인률</span>
+                                        <span class="metric-value" id="effective_discount_ratio_result">0%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="metric-item">
+                                        <span class="metric-label formula-text">실할인액 = 총할인액 × (1 - 환불비율)</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="metric-item">
+                                        <span class="metric-label formula-text">실할인률 = 실할인액 ÷ (순매출액 + 실할인액)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 광고정보 결과 -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5><i data-lucide="megaphone" class="me-2"></i>광고정보</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="metric-item">
+                                        <span class="metric-label">광고실비</span>
+                                        <span class="metric-value" id="advertising_cost_result">₩0</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">일평균 광고실비</span>
+                                        <span class="metric-value" id="daily_avg_advertising_result">₩0</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">매출대비 광고비율</span>
+                                        <span class="metric-value" id="sales_advertising_ratio_result">0%</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label formula-text">매출대비 광고비율 = 광고실비 ÷ 순매출액</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="metric-item">
+                                        <span class="metric-label">보정광고비율</span>
+                                        <span class="metric-value text-success" id="corrected_ratio_result">0%</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label formula-text">보정광고비율 = (목표비율²) ÷ 매출대비 광고비율</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">적정광고비</span>
+                                        <span class="metric-value text-success" id="appropriate_advertising_result">₩0</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label formula-text">적정광고비 = 순매출액 × 보정광고비율</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">일당 적정광고비</span>
+                                        <span class="metric-value text-success" id="daily_appropriate_advertising_result">₩0</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label formula-text">일당 적정광고비 = 적정광고비 ÷ 집계기간</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 요약 정보 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i data-lucide="info" class="me-2"></i>분석 요약</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="summary-item">
+                                        <span class="summary-label">집계기간</span>
+                                        <span class="summary-value" id="period_result">최근 14일</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="summary-item">
+                                        <span class="summary-label">총 일수</span>
+                                        <span class="summary-value" id="total_days_result">14일</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="summary-item">
+                                        <span class="summary-label">최종 업데이트</span>
+                                        <span class="summary-value" id="last_updated_result">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 초기 안내 -->
+                <div id="welcomeMessage" class="text-center py-5">
+                    <i data-lucide="calculator" class="mb-3" style="width: 64px; height: 64px; color: #9ca3af;"></i>
+                    <h4 class="text-muted">데이터를 입력하고 분석을 시작하세요</h4>
+                    <p class="text-muted">왼쪽 폼에 매출, 환불, 할인, 광고비 정보를 입력하면<br>종합 분석 결과를 확인할 수 있습니다.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 플라스크 계산기 JavaScript
+        document.addEventListener('DOMContentLoaded', function() {
+            // Lucide 아이콘 초기화
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            
+            // 기본 날짜 설정 (오늘 기준 최근 14일)
+            setDefaultDates();
+            
+            // 폼 제출 이벤트 리스너
+            document.getElementById('analysisForm').addEventListener('submit', handleFormSubmit);
+            
+            // 입력 필드 실시간 유효성 검사
+            const inputs = document.querySelectorAll('input[type="number"]');
+            inputs.forEach(input => {
+                input.addEventListener('input', validateInput);
+            });
+            
+            // 날짜 변경 시 일수 계산
+            document.getElementById('start_date').addEventListener('change', calculateDays);
+            document.getElementById('end_date').addEventListener('change', calculateDays);
+        });
+
+        // 기본 날짜 설정 (어제부터 14일간)
+        function setDefaultDates() {
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1); // 어제
+            
+            const fourteenDaysAgo = new Date(yesterday);
+            fourteenDaysAgo.setDate(yesterday.getDate() - 13); // 어제부터 14일 전
+            
+            document.getElementById('end_date').value = yesterday.toISOString().split('T')[0];
+            document.getElementById('start_date').value = fourteenDaysAgo.toISOString().split('T')[0];
+        }
+
+        // 일수 계산
+        function calculateDays() {
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            
+            if (startDate && endDate) {
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                const diffTime = Math.abs(end - start);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // 시작일과 종료일 포함
+                
+                // 일수 표시 업데이트
+                const periodElement = document.getElementById('period_result');
+                if (periodElement) {
+                    periodElement.textContent = `${startDate} ~ ${endDate}`;
+                }
+                
+                const daysElement = document.getElementById('total_days_result');
+                if (daysElement) {
+                    daysElement.textContent = `${diffDays}일`;
+                }
+                
+                return diffDays;
+            }
+            return 14; // 기본값
+        }
+
+        // 폼 제출 처리
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            
+            try {
+                // 입력 데이터 수집
+                const formData = new FormData(event.target);
+                const totalDays = calculateDays(); // 일수 계산
+                
+                const data = {
+                    sales_amount: parseFloat(formData.get('sales_amount')) || 0,
+                    refund_amount: parseFloat(formData.get('refund_amount')) || 0,
+                    total_discount: parseFloat(formData.get('total_discount')) || 0,
+                    advertising_cost: parseFloat(formData.get('advertising_cost')) || 0,
+                    target_ratio: (parseFloat(formData.get('target_ratio')) || 10) / 100,
+                    total_days: totalDays
+                };
+                
+                // 유효성 검사
+                if (!validateFormData(data)) {
+                    return;
+                }
+                
+                // 로딩 표시
+                showLoading();
+                
+                // 계산 수행
+                const results = calculateAnalysis(data);
+                displayResults(results);
+                
+            } catch (error) {
+                console.error('계산 오류:', error);
+                showError('계산 중 오류가 발생했습니다.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // 매출·광고·할인 종합분석 계산 함수
+        function calculateAnalysis(data) {
+            const { sales_amount, refund_amount, total_discount, advertising_cost, target_ratio, total_days } = data;
+            
+            // 매출정보 계산
+            const refund_ratio = sales_amount > 0 ? refund_amount / sales_amount : 0;
+            const net_sales = sales_amount - refund_amount;
+            const daily_avg_net_sales = net_sales / total_days;
+            
+            // 할인정보 계산
+            const effective_discount = total_discount * (1 - refund_ratio);
+            const effective_discount_ratio = (net_sales + effective_discount) > 0 ? effective_discount / (net_sales + effective_discount) : 0;
+            
+            // 광고정보 계산
+            const daily_avg_advertising = advertising_cost / total_days;
+            const sales_advertising_ratio = net_sales > 0 ? advertising_cost / net_sales : 0;
+            
+            // 보정광고비율 계산 (하한선 7.5%, 상한선 15%)
+            const lower_limit = 0.075;
+            const upper_limit = 0.15;
+            
+            let corrected_ratio;
+            if (sales_advertising_ratio > 0) {
+                corrected_ratio = (target_ratio ** 2) / sales_advertising_ratio;
+                corrected_ratio = Math.max(lower_limit, Math.min(upper_limit, corrected_ratio));
+            } else {
+                corrected_ratio = target_ratio;
+            }
+            
+            const appropriate_advertising = net_sales * corrected_ratio;
+            const daily_appropriate_advertising = appropriate_advertising / total_days;
+            
+            return {
+                sales_info: {
+                    sales_amount,
+                    refund_amount,
+                    refund_ratio,
+                    net_sales,
+                    daily_avg_net_sales
+                },
+                discount_info: {
+                    total_discount,
+                    effective_discount,
+                    effective_discount_ratio
+                },
+                advertising_info: {
+                    advertising_cost,
+                    daily_avg_advertising,
+                    sales_advertising_ratio,
+                    corrected_ratio,
+                    appropriate_advertising,
+                    daily_appropriate_advertising
+                },
+                summary: {
+                    period: `${document.getElementById('start_date').value} ~ ${document.getElementById('end_date').value}`,
+                    total_days: total_days,
+                    last_updated: new Date().toLocaleString('ko-KR')
+                }
+            };
+        }
+
+        // 폼 데이터 유효성 검사
+        function validateFormData(data) {
+            if (data.sales_amount < 0) {
+                showError('매출액은 0 이상이어야 합니다.');
+                return false;
+            }
+            
+            if (data.refund_amount < 0) {
+                showError('환불금액은 0 이상이어야 합니다.');
+                return false;
+            }
+            
+            if (data.refund_amount > data.sales_amount) {
+                showError('환불금액은 매출액보다 클 수 없습니다.');
+                return false;
+            }
+            
+            if (data.total_discount < 0) {
+                showError('총할인액은 0 이상이어야 합니다.');
+                return false;
+            }
+            
+            if (data.advertising_cost < 0) {
+                showError('광고실비는 0 이상이어야 합니다.');
+                return false;
+            }
+            
+            if (data.target_ratio < 0 || data.target_ratio > 1) {
+                showError('목표 광고비율은 0% ~ 100% 사이여야 합니다.');
+                return false;
+            }
+            
+            return true;
+        }
+
+        // 입력 필드 유효성 검사
+        function validateInput(event) {
+            const input = event.target;
+            const value = parseFloat(input.value);
+            
+            // 음수 체크
+            if (value < 0) {
+                input.classList.add('is-invalid');
+                return;
+            }
+            
+            // 환불금액이 매출액보다 큰지 체크
+            if (input.id === 'refund_amount') {
+                const salesAmount = parseFloat(document.getElementById('sales_amount').value) || 0;
+                if (value > salesAmount) {
+                    input.classList.add('is-invalid');
+                    return;
+                }
+            }
+            
+            input.classList.remove('is-invalid');
+        }
+
+        // 결과 표시
+        function displayResults(results) {
+            // 매출정보 결과
+            document.getElementById('sales_amount_result').textContent = formatCurrency(results.sales_info.sales_amount);
+            document.getElementById('refund_amount_result').textContent = formatCurrency(results.sales_info.refund_amount);
+            document.getElementById('refund_ratio_result').textContent = formatPercentage(results.sales_info.refund_ratio);
+            document.getElementById('net_sales_result').textContent = formatCurrency(results.sales_info.net_sales);
+            document.getElementById('daily_avg_net_sales_result').textContent = formatCurrency(results.sales_info.daily_avg_net_sales);
+            
+            // 할인정보 결과
+            document.getElementById('total_discount_result').textContent = formatCurrency(results.discount_info.total_discount);
+            document.getElementById('effective_discount_result').textContent = formatCurrency(results.discount_info.effective_discount);
+            document.getElementById('effective_discount_ratio_result').textContent = formatPercentage(results.discount_info.effective_discount_ratio);
+            
+            // 광고정보 결과
+            document.getElementById('advertising_cost_result').textContent = formatCurrency(results.advertising_info.advertising_cost);
+            document.getElementById('daily_avg_advertising_result').textContent = formatCurrency(results.advertising_info.daily_avg_advertising);
+            document.getElementById('sales_advertising_ratio_result').textContent = formatPercentage(results.advertising_info.sales_advertising_ratio);
+            document.getElementById('corrected_ratio_result').textContent = formatPercentage(results.advertising_info.corrected_ratio);
+            document.getElementById('appropriate_advertising_result').textContent = formatCurrency(results.advertising_info.appropriate_advertising);
+            document.getElementById('daily_appropriate_advertising_result').textContent = formatCurrency(results.advertising_info.daily_appropriate_advertising);
+            
+            // 요약 정보
+            document.getElementById('period_result').textContent = results.summary.period;
+            document.getElementById('total_days_result').textContent = `${results.summary.total_days}일`;
+            document.getElementById('last_updated_result').textContent = results.summary.last_updated;
+            
+            // 결과 컨테이너 표시
+            document.getElementById('resultsContainer').style.display = 'block';
+            document.getElementById('welcomeMessage').style.display = 'none';
+            
+            // 보고서 추출 버튼 표시
+            document.getElementById('exportReportBtn').style.display = 'block';
+            
+            // 결과로 스크롤
+            document.getElementById('resultsContainer').scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+        }
+
+        // 통화 포맷팅
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('ko-KR', {
+                style: 'currency',
+                currency: 'KRW',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        // 퍼센트 포맷팅
+        function formatPercentage(value) {
+            return new Intl.NumberFormat('ko-KR', {
+                style: 'percent',
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 2
+            }).format(value);
+        }
+
+        // 로딩 표시
+        function showLoading() {
+            const submitBtn = document.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i data-lucide="loader-2" class="me-1"></i>계산 중...';
+            submitBtn.disabled = true;
+            
+            // 아이콘 다시 초기화
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        // 로딩 숨기기
+        function hideLoading() {
+            const submitBtn = document.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<i data-lucide="play" class="me-1"></i>분석 계산';
+            submitBtn.disabled = false;
+            
+            // 아이콘 다시 초기화
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        // 오류 표시
+        function showError(message) {
+            // 기존 오류 메시지 제거
+            const existingAlert = document.querySelector('.alert-danger');
+            if (existingAlert) {
+                existingAlert.remove();
+            }
+            
+            // 새 오류 메시지 생성
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show';
+            alert.innerHTML = `
+                <i data-lucide="alert-circle" class="me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            // 폼 위에 삽입
+            const form = document.getElementById('analysisForm');
+            form.parentNode.insertBefore(alert, form);
+            
+            // 아이콘 초기화
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            
+            // 5초 후 자동 제거
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+
+        // 보고서 추출
+        function exportReport() {
+            try {
+                const reportText = generateReportText();
+                
+                // 클립보드에 복사
+                navigator.clipboard.writeText(reportText).then(() => {
+                    showClipboardSuccess();
+                }).catch(err => {
+                    // 클립보드 API가 지원되지 않는 경우 대체 방법
+                    const textArea = document.createElement('textarea');
+                    textArea.value = reportText;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    showClipboardSuccess();
+                });
+                
+            } catch (error) {
+                console.error('보고서 추출 오류:', error);
+                showError('보고서 추출 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 클립보드 복사 성공 알림
+        function showClipboardSuccess() {
+            // 기존 알림 제거
+            const existingAlert = document.querySelector('.alert-success');
+            if (existingAlert) {
+                existingAlert.remove();
+            }
+            
+            // 새 성공 알림 생성
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-success alert-dismissible fade show';
+            alert.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            alert.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i data-lucide="check-circle" class="me-2" style="color: #059669;"></i>
+                    <div>
+                        <strong>복사 완료!</strong><br>
+                        <small>보고서가 클립보드에 복사되었습니다.</small>
+                    </div>
+                    <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            // 페이지에 추가
+            document.body.appendChild(alert);
+            
+            // 아이콘 초기화
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            
+            // 3초 후 자동 제거
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 3000);
+        }
+
+        // 보고서 텍스트 생성
+        function generateReportText() {
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            const totalDays = calculateDays();
+            
+            const salesAmount = document.getElementById('sales_amount_result').textContent;
+            const refundAmount = document.getElementById('refund_amount_result').textContent;
+            const refundRatio = document.getElementById('refund_ratio_result').textContent;
+            const netSales = document.getElementById('net_sales_result').textContent;
+            const dailyAvgNetSales = document.getElementById('daily_avg_net_sales_result').textContent;
+            const totalDiscount = document.getElementById('total_discount_result').textContent;
+            const effectiveDiscount = document.getElementById('effective_discount_result').textContent;
+            const effectiveDiscountRatio = document.getElementById('effective_discount_ratio_result').textContent;
+            
+            const advertisingCost = document.getElementById('advertising_cost_result').textContent;
+            const dailyAvgAdvertising = document.getElementById('daily_avg_advertising_result').textContent;
+            const salesAdvertisingRatio = document.getElementById('sales_advertising_ratio_result').textContent;
+            const correctedRatio = document.getElementById('corrected_ratio_result').textContent;
+            const appropriateAdvertising = document.getElementById('appropriate_advertising_result').textContent;
+            
+            const lastUpdated = document.getElementById('last_updated_result').textContent;
+            
+            return `플라스크 - 매출·광고·할인 종합분석 보고서
+
+📊 분석 개요
+• 집계기간: ${startDate} ~ ${endDate} (${totalDays}일)
+• 분석일시: ${lastUpdated}
+
+💰 매출정보
+• 매출액: ${salesAmount}
+• 환불금액: ${refundAmount}
+• 환불비율: ${refundRatio}
+• 순매출액: ${netSales}
+• 일평균 순매출: ${dailyAvgNetSales}
+
+📈 할인정보
+• 총할인액: ${totalDiscount}
+• 실할인액: ${effectiveDiscount}
+• 실할인률: ${effectiveDiscountRatio}
+
+📢 광고정보
+• 광고실비: ${advertisingCost}
+• 일평균 광고실비: ${dailyAvgAdvertising}
+• 매출대비 광고비율: ${salesAdvertisingRatio}
+• 보정광고비율: ${correctedRatio}
+• 적정광고비: ${appropriateAdvertising}
+• 일당 적정광고비: ${document.getElementById('daily_appropriate_advertising_result').textContent}
+
+📝 분석 요약
+• 순매출액: ${netSales}
+• 적정광고비: ${appropriateAdvertising}
+• 일평균 순매출: ${dailyAvgNetSales}
+• 일평균 광고비: ${dailyAvgAdvertising}
+
+위 보고서는 플라스크 분석 도구로 생성된 보고서입니다.
+`;
+        }
+    </script>
+</body>
+</html>
