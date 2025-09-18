@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>플라스크 - 매출·광고·할인 종합분석</title>
+    <title>플라스크 - 데이터 종합분석 도구</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -169,6 +169,45 @@
             font-weight: 500;
         }
 
+        .date-range-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .date-range-btn {
+            flex: 1;
+            justify-content: center;
+            font-weight: 500;
+        }
+
+        .date-range-btn.active {
+            background-color: #374151;
+            border-color: #374151;
+            color: white;
+        }
+
+        .nav-tabs {
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .nav-tabs .nav-link {
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #6b7280;
+            font-weight: 500;
+            padding: 0.75rem 1.25rem;
+        }
+
+        .nav-tabs .nav-link:hover {
+            color: #374151;
+        }
+
+        .nav-tabs .nav-link.active {
+            color: #1f2937;
+            border-color: #1f2937;
+            background-color: transparent;
+        }
+
         /* 폼 스타일 개선 */
         .form-text {
             font-size: 0.75rem;
@@ -299,13 +338,27 @@
                 <i data-lucide="flask" class="me-2"></i>플라스크
             </span>
             <div class="d-flex">
-                <span class="text-muted small">매출·광고·할인 종합분석</span>
+                <span class="text-muted small">데이터 종합분석 도구</span>
             </div>
         </div>
     </nav>
 
     <div class="container-fluid mt-4">
-        <div class="row">
+        <ul class="nav nav-tabs" id="workspaceTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="sheet1-tab" data-bs-toggle="tab" data-bs-target="#sheet1" type="button" role="tab" aria-controls="sheet1" aria-selected="true">종합분석</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="sheet2-tab" data-bs-toggle="tab" data-bs-target="#sheet2" type="button" role="tab" aria-controls="sheet2" aria-selected="false">시트 2</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="sheet3-tab" data-bs-toggle="tab" data-bs-target="#sheet3" type="button" role="tab" aria-controls="sheet3" aria-selected="false">시트 3</button>
+            </li>
+        </ul>
+
+        <div class="tab-content pt-4" id="workspaceTabContent">
+            <div class="tab-pane fade show active" id="sheet1" role="tabpanel" aria-labelledby="sheet1-tab">
+                <div class="row">
             <!-- 입력 폼 -->
             <div class="col-md-4">
                 <div class="card">
@@ -317,6 +370,11 @@
                             <!-- 집계기간 설정 -->
                             <div class="mb-4">
                                 <h6 class="text-muted mb-3">집계기간</h6>
+                                <div class="date-range-buttons mb-3">
+                                    <button type="button" class="btn date-range-btn" data-range="7">최근 7일</button>
+                                    <button type="button" class="btn date-range-btn" data-range="14">최근 14일</button>
+                                    <button type="button" class="btn date-range-btn" data-range="30">최근 30일</button>
+                                </div>
                                 <div class="mb-3">
                                     <label for="start_date" class="form-label">시작일</label>
                                     <input type="date" class="form-control" id="start_date" name="start_date">
@@ -326,7 +384,7 @@
                                     <input type="date" class="form-control" id="end_date" name="end_date">
                                 </div>
                                 <div class="mb-3">
-                                    <div class="form-text">기본값: 어제부터 14일간 (예: 오늘이 9/17이면 9/3~9/16)</div>
+                                    <div class="form-text">어제 기준 기간을 자동으로 설정하거나 직접 날짜를 선택하세요.</div>
                                 </div>
                             </div>
 
@@ -386,6 +444,29 @@
             <!-- 결과 표시 -->
             <div class="col-md-8">
                 <div id="resultsContainer" style="display: none;">
+                    <!-- 요약 정보 -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5><i data-lucide="info" class="me-2"></i>분석 요약</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="summary-item">
+                                        <span class="summary-label">집계기간</span>
+                                        <span class="summary-value" id="period_result">최근 14일</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="summary-item">
+                                        <span class="summary-label">총 일수</span>
+                                        <span class="summary-value" id="total_days_result">14일</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 매출정보 결과 -->
                     <div class="card mb-4">
                         <div class="card-header">
@@ -522,34 +603,6 @@
                         </div>
                     </div>
 
-                    <!-- 요약 정보 -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h5><i data-lucide="info" class="me-2"></i>분석 요약</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="summary-item">
-                                        <span class="summary-label">집계기간</span>
-                                        <span class="summary-value" id="period_result">최근 14일</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="summary-item">
-                                        <span class="summary-label">총 일수</span>
-                                        <span class="summary-value" id="total_days_result">14일</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="summary-item">
-                                        <span class="summary-label">최종 업데이트</span>
-                                        <span class="summary-value" id="last_updated_result">-</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- 초기 안내 -->
@@ -560,11 +613,33 @@
                 </div>
             </div>
         </div>
+            </div>
+            <div class="tab-pane fade" id="sheet2" role="tabpanel" aria-labelledby="sheet2-tab">
+                <div class="card">
+                    <div class="card-body text-center text-muted py-5">
+                        <i data-lucide="layout-grid" class="mb-3" style="width: 48px; height: 48px; color: #d1d5db;"></i>
+                        <h5 class="mb-2">빈 시트</h5>
+                        <p class="mb-0">필요한 계산 로직을 이곳에 추가하세요.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="sheet3" role="tabpanel" aria-labelledby="sheet3-tab">
+                <div class="card">
+                    <div class="card-body text-center text-muted py-5">
+                        <i data-lucide="file-plus" class="mb-3" style="width: 48px; height: 48px; color: #d1d5db;"></i>
+                        <h5 class="mb-2">빈 시트</h5>
+                        <p class="mb-0">이 탭도 자유롭게 확장할 수 있습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // 플라스크 계산기 JavaScript
+        const DATE_PRESETS = [7, 14, 30];
+
         document.addEventListener('DOMContentLoaded', function() {
             // Lucide 아이콘 초기화
             if (typeof lucide !== 'undefined') {
@@ -572,6 +647,7 @@
             }
             
             // 기본 날짜 설정 (오늘 기준 최근 14일)
+            setupDatePresetButtons();
             setDefaultDates();
             
             // 폼 제출 이벤트 리스너
@@ -590,15 +666,79 @@
 
         // 기본 날짜 설정 (어제부터 14일간)
         function setDefaultDates() {
+            applyDatePreset(14);
+        }
+
+        function setupDatePresetButtons() {
+            const buttons = document.querySelectorAll('.date-range-btn');
+            buttons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const range = parseInt(button.dataset.range, 10);
+                    if (!Number.isNaN(range)) {
+                        applyDatePreset(range);
+                    }
+                });
+            });
+        }
+
+        function applyDatePreset(days) {
+            const startInput = document.getElementById('start_date');
+            const endInput = document.getElementById('end_date');
+
+            if (!startInput || !endInput) {
+                return;
+            }
+
+            const { start, end } = getPresetDateRange(days);
+            startInput.value = formatDateInput(start);
+            endInput.value = formatDateInput(end);
+
+            setActivePresetButton(days);
+            calculateDays();
+        }
+
+        function getPresetDateRange(days) {
+            const end = getYesterday();
+            const start = new Date(end);
+            start.setDate(end.getDate() - (days - 1));
+            return { start, end };
+        }
+
+        function formatDateInput(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function getYesterday() {
             const today = new Date();
             const yesterday = new Date(today);
-            yesterday.setDate(today.getDate() - 1); // 어제
-            
-            const fourteenDaysAgo = new Date(yesterday);
-            fourteenDaysAgo.setDate(yesterday.getDate() - 13); // 어제부터 14일 전
-            
-            document.getElementById('end_date').value = yesterday.toISOString().split('T')[0];
-            document.getElementById('start_date').value = fourteenDaysAgo.toISOString().split('T')[0];
+            yesterday.setDate(today.getDate() - 1);
+            return yesterday;
+        }
+
+        function isSameDate(a, b) {
+            return (
+                a.getFullYear() === b.getFullYear() &&
+                a.getMonth() === b.getMonth() &&
+                a.getDate() === b.getDate()
+            );
+        }
+
+        function isPresetRange(start, end, diffDays) {
+            if (!DATE_PRESETS.includes(diffDays)) {
+                return false;
+            }
+            const yesterday = getYesterday();
+            return isSameDate(end, yesterday);
+        }
+
+        function setActivePresetButton(days) {
+            const buttons = document.querySelectorAll('.date-range-btn');
+            buttons.forEach(button => {
+                const range = parseInt(button.dataset.range, 10);
+                const isActive = !Number.isNaN(range) && days === range;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
         }
 
         // 일수 계산
@@ -612,6 +752,12 @@
                 const diffTime = Math.abs(end - start);
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // 시작일과 종료일 포함
                 
+                if (isPresetRange(start, end, diffDays)) {
+                    setActivePresetButton(diffDays);
+                } else {
+                    setActivePresetButton(null);
+                }
+
                 // 일수 표시 업데이트
                 const periodElement = document.getElementById('period_result');
                 if (periodElement) {
@@ -721,8 +867,7 @@
                 },
                 summary: {
                     period: `${document.getElementById('start_date').value} ~ ${document.getElementById('end_date').value}`,
-                    total_days: total_days,
-                    last_updated: new Date().toLocaleString('ko-KR')
+                    total_days: total_days
                 }
             };
         }
@@ -810,8 +955,7 @@
             // 요약 정보
             document.getElementById('period_result').textContent = results.summary.period;
             document.getElementById('total_days_result').textContent = `${results.summary.total_days}일`;
-            document.getElementById('last_updated_result').textContent = results.summary.last_updated;
-            
+
             // 결과 컨테이너 표시
             document.getElementById('resultsContainer').style.display = 'block';
             document.getElementById('welcomeMessage').style.display = 'none';
@@ -987,14 +1131,11 @@
             const salesAdvertisingRatio = document.getElementById('sales_advertising_ratio_result').textContent;
             const correctedRatio = document.getElementById('corrected_ratio_result').textContent;
             const appropriateAdvertising = document.getElementById('appropriate_advertising_result').textContent;
-            
-            const lastUpdated = document.getElementById('last_updated_result').textContent;
-            
+
             return `플라스크 - 매출·광고·할인 종합분석 보고서
 
 📊 분석 개요
 • 집계기간: ${startDate} ~ ${endDate} (${totalDays}일)
-• 분석일시: ${lastUpdated}
 
 💰 매출정보
 • 매출액: ${salesAmount}
