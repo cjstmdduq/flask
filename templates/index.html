@@ -34,9 +34,54 @@
         }
 
         .container-fluid {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
+            padding: 0;
+        }
+
+        .main-container {
+            display: flex;
+            min-height: calc(100vh - 60px);
+        }
+
+        .sidebar {
+            width: 240px;
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            padding: 1.5rem 0;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar-menu-item {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-menu-item:hover {
+            background: #f9fafb;
+            color: #374151;
+        }
+
+        .sidebar-menu-item.active {
+            background: #f3f4f6;
+            color: #1f2937;
+            border-left-color: #374151;
+        }
+
+        .content-area {
+            flex: 1;
             padding: 0 1rem;
+            overflow-x: hidden;
         }
 
         .main-tabs {
@@ -336,33 +381,49 @@
         </div>
     </nav>
 
-    <div class="container-fluid mt-4">
-        <!-- 메인 탭 -->
-        <div class="main-tabs">
-            <ul class="nav nav-tabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales-dashboard" type="button" role="tab">
-                        판매성과
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="settle-tab" data-bs-toggle="tab" data-bs-target="#settle-dashboard" type="button" role="tab">
-                        정산기준
-                    </button>
-                </li>
-            </ul>
-        </div>
+    <div class="container-fluid">
+        <div class="main-container">
+            <!-- 왼쪽 사이드바 -->
+            <aside class="sidebar">
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item active" data-menu="sales-analysis">
+                        매출∙광고∙할인 분석
+                    </li>
+                </ul>
+            </aside>
 
-        <!-- 탭 컨텐츠 -->
-        <div class="tab-content">
-            <!-- 판매성과 대시보드 -->
-            <div class="tab-pane fade show active" id="sales-dashboard" role="tabpanel">
-                <div id="sales-content"></div>
-            </div>
+            <!-- 메인 컨텐츠 영역 -->
+            <div class="content-area">
+                <div class="mt-4">
+                    <!-- 메인 탭 -->
+                    <div class="main-tabs">
+                        <ul class="nav nav-tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales-dashboard" type="button" role="tab">
+                                    판매성과
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="settle-tab" data-bs-toggle="tab" data-bs-target="#settle-dashboard" type="button" role="tab">
+                                    정산기준
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
 
-            <!-- 정산기준 대시보드 -->
-            <div class="tab-pane fade" id="settle-dashboard" role="tabpanel">
-                <div id="settle-content"></div>
+                    <!-- 탭 컨텐츠 -->
+                    <div class="tab-content">
+                        <!-- 판매성과 대시보드 -->
+                        <div class="tab-pane fade show active" id="sales-dashboard" role="tabpanel">
+                            <div id="sales-content"></div>
+                        </div>
+
+                        <!-- 정산기준 대시보드 -->
+                        <div class="tab-pane fade" id="settle-dashboard" role="tabpanel">
+                            <div id="settle-content"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -480,8 +541,8 @@
                             <div class="date-filter-title">기간 선택</div>
                             <div class="date-preset-buttons">
                                 <button class="date-preset-btn" data-type="${prefix}" data-days="7">최근 7일</button>
-                                <button class="date-preset-btn" data-type="${prefix}" data-days="14">최근 14일</button>
-                                <button class="date-preset-btn active" data-type="${prefix}" data-days="30">최근 30일</button>
+                                <button class="date-preset-btn active" data-type="${prefix}" data-days="14">최근 14일</button>
+                                <button class="date-preset-btn" data-type="${prefix}" data-days="30">최근 30일</button>
                                 <button class="date-preset-btn" data-type="${prefix}" data-preset="this-month">이번달</button>
                                 <button class="date-preset-btn" data-type="${prefix}" data-preset="last-month">저번달</button>
                             </div>
@@ -489,17 +550,21 @@
                             <div class="row mb-3">
                                 <div class="col-md-5">
                                     <label class="form-label">시작일</label>
-                                    <input type="date" class="form-control" id="${prefix}-startDate">
+                                    <input type="date" class="form-control ${prefix}-date-input" id="${prefix}-startDate">
                                 </div>
                                 <div class="col-md-5">
                                     <label class="form-label">종료일</label>
-                                    <input type="date" class="form-control" id="${prefix}-endDate">
+                                    <input type="date" class="form-control ${prefix}-date-input" id="${prefix}-endDate">
                                 </div>
                                 <div class="col-md-2 d-flex align-items-end">
-                                    <button class="btn-filter" onclick="applyFilter('${prefix}')">
-                                        <i data-lucide="filter"></i>
-                                        필터 적용
-                                    </button>
+                                    <div style="display: flex; gap: 0.25rem; width: 100%;">
+                                        <button class="btn-filter" style="width: 40px; padding: 0.75rem 0;" onclick="navigateDates('${prefix}', -1)" title="이전">
+                                            <i data-lucide="chevron-left"></i>
+                                        </button>
+                                        <button class="btn-filter" style="width: 40px; padding: 0.75rem 0;" onclick="navigateDates('${prefix}', 1)" title="다음">
+                                            <i data-lucide="chevron-right"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -514,7 +579,7 @@
                                     <input type="checkbox" id="${prefix}-showAdCost" checked> 광고비
                                 </label>
                                 <label class="checkbox-label">
-                                    <input type="checkbox" id="${prefix}-showRefundOnly"> 전년도 동일일
+                                    <input type="checkbox" id="${prefix}-showPrevYear" checked> 전년도 동일일
                                 </label>
                             </div>
                         </div>
@@ -608,16 +673,33 @@
                 });
             });
 
-            // 체크박스 변경
-            document.querySelectorAll(`#${prefix}-showPayment, #${prefix}-showNetSales, #${prefix}-showAdCost`).forEach(cb => {
-                cb.addEventListener('change', () => updateChart(type));
+            // 날짜 입력 변경 시 자동 필터 적용
+            document.querySelectorAll(`.${prefix}-date-input`).forEach(input => {
+                input.addEventListener('change', () => {
+                    if (type === 'sales') {
+                        loadSalesData();
+                    } else {
+                        loadSettleData();
+                    }
+                });
+            });
+
+            // 체크박스 변경 시 자동 차트 업데이트
+            document.querySelectorAll(`#${prefix}-showPayment, #${prefix}-showNetSales, #${prefix}-showAdCost, #${prefix}-showPrevYear`).forEach(cb => {
+                cb.addEventListener('change', () => {
+                    if (type === 'sales') {
+                        loadSalesData();
+                    } else {
+                        loadSettleData();
+                    }
+                });
             });
 
             // 목표 광고비율 변경
             document.getElementById(`${prefix}-targetMargin`).addEventListener('input', () => calculateMarginAnalysis(type));
 
-            // 초기 날짜 설정
-            setDateRange(prefix, 30);
+            // 초기 날짜 설정 (14일로 변경)
+            setDateRange(prefix, 14);
         }
 
         function setDateRange(prefix, days) {
@@ -653,12 +735,65 @@
             return date.toISOString().split('T')[0];
         }
 
-        function applyFilter(type) {
-            if (type === 'sales') {
+        function formatDateWithWeekday(dateStr) {
+            // dateStr: "2025-10-20" 형식
+            const date = new Date(dateStr);
+            const year = String(date.getFullYear()).slice(2); // 25
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+            const weekday = weekdays[date.getDay()];
+
+            return `${year}-${month}-${day}(${weekday})`;
+        }
+
+        function getPreviousYearSameWeekday(dateStr) {
+            // 전년도 동일 요일 찾기
+            const currentDate = new Date(dateStr);
+            const currentWeekday = currentDate.getDay();
+
+            // 1년 전 날짜
+            const previousYear = new Date(currentDate);
+            previousYear.setFullYear(currentDate.getFullYear() - 1);
+
+            // 요일 차이 계산
+            const previousWeekday = previousYear.getDay();
+            const dayDiff = currentWeekday - previousWeekday;
+
+            // 동일 요일로 맞추기
+            previousYear.setDate(previousYear.getDate() + dayDiff);
+
+            return formatDate(previousYear);
+        }
+
+        function navigateDates(prefix, direction) {
+            // direction: -1 (이전), 1 (다음)
+            const startInput = document.getElementById(`${prefix}-startDate`);
+            const endInput = document.getElementById(`${prefix}-endDate`);
+
+            const startDate = new Date(startInput.value);
+            const endDate = new Date(endInput.value);
+
+            // 현재 선택된 기간 계산
+            const diffTime = Math.abs(endDate - startDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+            // 기간만큼 이동
+            startDate.setDate(startDate.getDate() + (diffDays * direction));
+            endDate.setDate(endDate.getDate() + (diffDays * direction));
+
+            startInput.value = formatDate(startDate);
+            endInput.value = formatDate(endDate);
+
+            // 데이터 자동 로드
+            if (prefix === 'sales') {
                 loadSalesData();
             } else {
                 loadSettleData();
             }
+
+            // 아이콘 재초기화
+            lucide.createIcons();
         }
 
         async function loadSalesData() {
@@ -742,7 +877,7 @@
             document.getElementById(`${prefix}-dailyAvgAdCost`).textContent = formatCurrency(adStats.total_stats.total_ad_cost / days);
         }
 
-        function updateChart(type) {
+        async function updateChart(type) {
             const prefix = type;
             const data = type === 'sales' ? salesData : settleData;
             const dailySummary = data.daily_summary || [];
@@ -774,6 +909,14 @@
 
             const datasets = [];
 
+            // 전년도 동요일 데이터 로드 (체크박스가 선택된 경우)
+            let prevYearData = null;
+            if (document.getElementById(`${prefix}-showPrevYear`).checked) {
+                console.log('Loading previous year data for type:', type);
+                prevYearData = await loadPreviousYearData(type, dates);
+                console.log('Previous year data loaded:', prevYearData);
+            }
+
             if (document.getElementById(`${prefix}-showPayment`).checked) {
                 datasets.push({
                     label: '결제금액',
@@ -783,6 +926,20 @@
                     tension: 0.4,
                     fill: true
                 });
+
+                // 전년도 동요일 결제금액 (점선)
+                if (prevYearData) {
+                    datasets.push({
+                        label: '전년도 결제금액',
+                        data: prevYearData.payments,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'transparent',
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 3
+                    });
+                }
             }
 
             if (document.getElementById(`${prefix}-showNetSales`).checked) {
@@ -794,6 +951,20 @@
                     tension: 0.4,
                     fill: true
                 });
+
+                // 전년도 동요일 순매출 (점선)
+                if (prevYearData) {
+                    datasets.push({
+                        label: '전년도 순매출',
+                        data: prevYearData.netSales,
+                        borderColor: '#10b981',
+                        backgroundColor: 'transparent',
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 3
+                    });
+                }
             }
 
             if (document.getElementById(`${prefix}-showAdCost`).checked) {
@@ -806,6 +977,21 @@
                     fill: true,
                     yAxisID: 'y1'
                 });
+
+                // 전년도 동요일 광고비 (점선)
+                if (prevYearData) {
+                    datasets.push({
+                        label: '전년도 광고비',
+                        data: prevYearData.adCosts,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'transparent',
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 3,
+                        yAxisID: 'y1'
+                    });
+                }
             }
 
             const chart = type === 'sales' ? salesChart : settleChart;
@@ -817,7 +1003,7 @@
             const newChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: dates.map(d => d.substring(5)),
+                    labels: dates.map(d => formatDateWithWeekday(d)),
                     datasets: datasets
                 },
                 options: {
@@ -915,6 +1101,88 @@
 
         function formatPercentage(value) {
             return (value * 100).toFixed(2) + '%';
+        }
+
+        async function loadPreviousYearData(type, currentDates) {
+            if (!currentDates || currentDates.length === 0) {
+                return null;
+            }
+
+            // 전년도 동요일 날짜 목록 생성
+            const previousYearDates = currentDates.map(date => getPreviousYearSameWeekday(date));
+
+            // 최소/최대 날짜 찾기 (정렬되지 않았을 수 있으므로)
+            const sortedPrevDates = [...previousYearDates].sort();
+            const startDate = sortedPrevDates[0];
+            const endDate = sortedPrevDates[sortedPrevDates.length - 1];
+
+            console.log('Loading previous year data:', { startDate, endDate, currentDates, previousYearDates });
+
+            try {
+                const apiUrl = type === 'sales' ? '/api/sales_performance' : '/api/settle_data';
+                const [dataResponse, adResponse] = await Promise.all([
+                    fetch(`${apiUrl}?start_date=${startDate}&end_date=${endDate}`),
+                    fetch(`/api/ad_data?start_date=${startDate}&end_date=${endDate}`)
+                ]);
+
+                const dataResult = await dataResponse.json();
+                const adResult = await adResponse.json();
+
+                console.log('Previous year API results:', { dataResult, adResult });
+
+                if (!dataResult.success || !adResult.success) {
+                    console.error('Failed to load previous year data');
+                    return null;
+                }
+
+                // 날짜별 데이터 매핑
+                const dataMap = new Map();
+
+                if (dataResult.data.daily_summary) {
+                    dataResult.data.daily_summary.forEach(item => {
+                        dataMap.set(item.date, {
+                            payment: item.gross_sales || 0,
+                            netSales: item.net_sales || 0
+                        });
+                    });
+                }
+
+                if (adResult.data.daily_summary) {
+                    adResult.data.daily_summary.forEach(item => {
+                        if (dataMap.has(item.date)) {
+                            dataMap.get(item.date).adCost = item.total_cost || 0;
+                        } else {
+                            dataMap.set(item.date, { adCost: item.total_cost || 0 });
+                        }
+                    });
+                }
+
+                // 현재 날짜 순서에 맞춰 전년도 데이터 정렬
+                const payments = [];
+                const netSales = [];
+                const adCosts = [];
+
+                previousYearDates.forEach(prevDate => {
+                    const data = dataMap.get(prevDate);
+                    if (data) {
+                        payments.push(data.payment || 0);
+                        netSales.push(data.netSales || 0);
+                        adCosts.push(data.adCost || 0);
+                    } else {
+                        // 데이터가 없는 경우 null로 표시 (차트에서 연결 안됨)
+                        payments.push(null);
+                        netSales.push(null);
+                        adCosts.push(null);
+                    }
+                });
+
+                console.log('Previous year data mapped:', { payments, netSales, adCosts });
+
+                return { payments, netSales, adCosts };
+            } catch (error) {
+                console.error('전년도 데이터 로드 오류:', error);
+                return null;
+            }
         }
     </script>
 </body>
