@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>플라스크 - 데이터 대시보드</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #fafafa;
+            color: #2d3748;
+        }
+
+        .navbar {
+            padding: 1rem 0;
+            border-bottom: 1px solid #e2e8f0;
+            background-color: white;
+        }
+
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: #1a202c !important;
+        }
+
+        .container-fluid {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        .main-tabs {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 1.5rem;
+        }
+
+        .main-tabs .nav-tabs {
+            border-bottom: none;
+        }
+
+        .main-tabs .nav-link {
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #6b7280;
+            font-weight: 500;
+            padding: 1rem 2rem;
+            font-size: 0.9375rem;
+        }
+
+        .main-tabs .nav-link:hover {
+            color: #374151;
+        }
+
+        .main-tabs .nav-link.active {
+            color: #1f2937;
+            border-color: #1f2937;
+            background-color: transparent;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .metric-card-header {
+            display: flex;
+            align-items: center;
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-card-header i {
+            width: 16px;
+            height: 16px;
+            margin-right: 0.5rem;
+        }
+
+        .metric-card-value {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-card-sub {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .metric-card-sub i {
+            width: 14px;
+            height: 14px;
+        }
+
+        .date-filter-section {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .date-filter-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: #374151;
+        }
+
+        .date-preset-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .date-preset-btn {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .date-preset-btn:hover {
+            background: #f9fafb;
+        }
+
+        .date-preset-btn.active {
+            background: #374151;
+            color: white;
+            border-color: #374151;
+        }
+
+        .chart-container {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .chart-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            margin-right: 0.5rem;
+        }
+
+        .analysis-section {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .analysis-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .analysis-header i {
+            width: 18px;
+            height: 18px;
+            margin-right: 0.5rem;
+        }
+
+        .analysis-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .analysis-input-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .analysis-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 0.5rem;
+        }
+
+        .analysis-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+
+        .analysis-result {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .analysis-result:last-child {
+            border-bottom: none;
+        }
+
+        .analysis-result-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .analysis-result-value {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .highlighted-result {
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+        }
+
+        .highlighted-result-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .btn-filter {
+            width: 100%;
+            padding: 0.75rem;
+            background: #374151;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-filter:hover {
+            background: #1f2937;
+        }
+
+        .btn-filter i {
+            width: 16px;
+            height: 16px;
+        }
+
+        .form-control {
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .form-label {
+            font-size: 0.875rem;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .checkbox-group {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #374151;
+            cursor: pointer;
+        }
+
+        .checkbox-label input {
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container-fluid">
+            <span class="navbar-brand">
+                <i data-lucide="flask" style="width: 24px; height: 24px;"></i>
+                플라스크
+            </span>
+            <span class="text-muted small">데이터 대시보드</span>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- 메인 탭 -->
+        <div class="main-tabs">
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales-dashboard" type="button" role="tab">
+                        판매성과
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="settle-tab" data-bs-toggle="tab" data-bs-target="#settle-dashboard" type="button" role="tab">
+                        정산기준
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <!-- 탭 컨텐츠 -->
+        <div class="tab-content">
+            <!-- 판매성과 대시보드 -->
+            <div class="tab-pane fade show active" id="sales-dashboard" role="tabpanel">
+                <div id="sales-content"></div>
+            </div>
+
+            <!-- 정산기준 대시보드 -->
+            <div class="tab-pane fade" id="settle-dashboard" role="tabpanel">
+                <div id="settle-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let salesChart;
+        let settleChart;
+        let currentTab = 'sales';
+
+        // 데이터 저장소
+        let salesData = { total_stats: {}, daily_summary: [] };
+        let settleData = { total_stats: {}, daily_summary: [] };
+        let adData = { total_stats: {}, daily_summary: [] };
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            lucide.createIcons();
+            initializeDashboards();
+            setupTabListeners();
+        });
+
+        function setupTabListeners() {
+            document.getElementById('sales-tab').addEventListener('shown.bs.tab', function() {
+                currentTab = 'sales';
+                if (salesChart) salesChart.destroy();
+                loadSalesData();
+            });
+
+            document.getElementById('settle-tab').addEventListener('shown.bs.tab', function() {
+                currentTab = 'settle';
+                if (settleChart) settleChart.destroy();
+                loadSettleData();
+            });
+        }
+
+        function initializeDashboards() {
+            // 판매성과 대시보드 렌더링
+            document.getElementById('sales-content').innerHTML = getDashboardHTML('sales');
+
+            // 정산기준 대시보드 렌더링
+            document.getElementById('settle-content').innerHTML = getDashboardHTML('settle');
+
+            // 이벤트 리스너 설정
+            setupDashboardListeners('sales');
+            setupDashboardListeners('settle');
+
+            // 초기 데이터 로드
+            loadSalesData();
+        }
+
+        function getDashboardHTML(type) {
+            const prefix = type;
+            return `
+                <!-- 메트릭 카드 -->
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-card-header">
+                                총 매출 (결제금액)
+                                <i data-lucide="help-circle" style="margin-left: auto;"></i>
+                            </div>
+                            <div class="metric-card-value" id="${prefix}-totalSales">₩0</div>
+                            <div class="metric-card-sub">
+                                <i data-lucide="calendar"></i>
+                                일평균 <span id="${prefix}-dailyAvgSales">₩0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-card-header">
+                                순매출 (환불제외)
+                                <i data-lucide="help-circle" style="margin-left: auto;"></i>
+                            </div>
+                            <div class="metric-card-value" id="${prefix}-netSales">₩0</div>
+                            <div class="metric-card-sub">
+                                <i data-lucide="calendar"></i>
+                                일평균 <span id="${prefix}-dailyAvgNetSales">₩0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-card-header">
+                                총 광고비 (VAT포함)
+                                <i data-lucide="help-circle" style="margin-left: auto;"></i>
+                            </div>
+                            <div class="metric-card-value" id="${prefix}-totalAdCost">₩0</div>
+                            <div class="metric-card-sub">
+                                <i data-lucide="calendar"></i>
+                                일평균 <span id="${prefix}-dailyAvgAdCost">₩0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-card-header">
+                                쿠폰 할인율
+                                <i data-lucide="help-circle" style="margin-left: auto;"></i>
+                            </div>
+                            <div class="metric-card-value" id="${prefix}-couponRate">0%</div>
+                            <div class="metric-card-sub" style="font-size: 0.75rem;">
+                                ${type === 'sales' ? '쿠폰합계/(순매출+쿠폰합계)' : '수수료/(순매출+수수료)'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <!-- 좌측: 차트 영역 -->
+                    <div class="col-md-9">
+                        <!-- 날짜 필터 -->
+                        <div class="date-filter-section">
+                            <div class="date-filter-title">기간 선택</div>
+                            <div class="date-preset-buttons">
+                                <button class="date-preset-btn" data-type="${prefix}" data-days="7">최근 7일</button>
+                                <button class="date-preset-btn" data-type="${prefix}" data-days="14">최근 14일</button>
+                                <button class="date-preset-btn active" data-type="${prefix}" data-days="30">최근 30일</button>
+                                <button class="date-preset-btn" data-type="${prefix}" data-preset="this-month">이번달</button>
+                                <button class="date-preset-btn" data-type="${prefix}" data-preset="last-month">저번달</button>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-5">
+                                    <label class="form-label">시작일</label>
+                                    <input type="date" class="form-control" id="${prefix}-startDate">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">종료일</label>
+                                    <input type="date" class="form-control" id="${prefix}-endDate">
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <button class="btn-filter" onclick="applyFilter('${prefix}')">
+                                        <i data-lucide="filter"></i>
+                                        필터 적용
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="${prefix}-showPayment" checked> 결제금액
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="${prefix}-showNetSales" checked> 순매출
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="${prefix}-showAdCost" checked> 광고비
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="${prefix}-showRefundOnly"> 전년도 동일일
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 차트 -->
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <div class="chart-title">결제일 매출 & 광고비 추세</div>
+                                <div class="chart-legend">
+                                    <div class="legend-item">
+                                        <div class="legend-color" style="background: #3b82f6;"></div>
+                                        결제금액
+                                    </div>
+                                    <div class="legend-item">
+                                        <div class="legend-color" style="background: #10b981;"></div>
+                                        순매출
+                                    </div>
+                                    <div class="legend-item">
+                                        <div class="legend-color" style="background: #f59e0b;"></div>
+                                        광고비
+                                    </div>
+                                </div>
+                            </div>
+                            <canvas id="${prefix}-mainChart" height="80"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- 우측: 목표 광고비율 분석 -->
+                    <div class="col-md-3">
+                        <div class="analysis-section">
+                            <div class="analysis-header">
+                                <i data-lucide="target"></i>
+                                <div class="analysis-title">적정 광고비율 분석</div>
+                            </div>
+
+                            <div class="analysis-input-group">
+                                <div class="analysis-label">목표 광고비율 기준 보정 계산</div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="number" class="analysis-input" id="${prefix}-targetMargin" value="10" min="0" max="100" step="0.1">
+                                    <span style="font-size: 0.875rem; color: #6b7280;">%</span>
+                                </div>
+                            </div>
+
+                            <div class="analysis-input-group">
+                                <div class="analysis-label">목표 광고비율 (%)</div>
+                                <div class="analysis-result">
+                                    <span class="analysis-result-label">전체 광고비율</span>
+                                    <span class="analysis-result-value" id="${prefix}-actualMargin">0.00%</span>
+                                </div>
+                                <div class="analysis-result">
+                                    <span class="analysis-result-label">보정 비율</span>
+                                    <span class="analysis-result-value" id="${prefix}-adjustedMargin">0.00%</span>
+                                </div>
+                            </div>
+
+                            <div class="highlighted-result">
+                                <div class="analysis-label">일평균 적정 광고비</div>
+                                <div class="highlighted-result-value" id="${prefix}-dailyTargetAd">₩0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setupDashboardListeners(type) {
+            const prefix = type;
+
+            // 날짜 프리셋 버튼
+            document.querySelectorAll(`.date-preset-btn[data-type="${prefix}"]`).forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll(`.date-preset-btn[data-type="${prefix}"]`).forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+
+                    const days = this.dataset.days;
+                    const preset = this.dataset.preset;
+
+                    if (days) {
+                        setDateRange(prefix, parseInt(days));
+                    } else if (preset === 'this-month') {
+                        setThisMonth(prefix);
+                    } else if (preset === 'last-month') {
+                        setLastMonth(prefix);
+                    }
+
+                    if (type === 'sales') {
+                        loadSalesData();
+                    } else {
+                        loadSettleData();
+                    }
+                });
+            });
+
+            // 체크박스 변경
+            document.querySelectorAll(`#${prefix}-showPayment, #${prefix}-showNetSales, #${prefix}-showAdCost`).forEach(cb => {
+                cb.addEventListener('change', () => updateChart(type));
+            });
+
+            // 목표 광고비율 변경
+            document.getElementById(`${prefix}-targetMargin`).addEventListener('input', () => calculateMarginAnalysis(type));
+
+            // 초기 날짜 설정
+            setDateRange(prefix, 30);
+        }
+
+        function setDateRange(prefix, days) {
+            const end = new Date();
+            end.setDate(end.getDate() - 1);
+            const start = new Date(end);
+            start.setDate(end.getDate() - (days - 1));
+
+            document.getElementById(`${prefix}-startDate`).value = formatDate(start);
+            document.getElementById(`${prefix}-endDate`).value = formatDate(end);
+        }
+
+        function setThisMonth(prefix) {
+            const now = new Date();
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            const end = new Date();
+            end.setDate(end.getDate() - 1);
+
+            document.getElementById(`${prefix}-startDate`).value = formatDate(start);
+            document.getElementById(`${prefix}-endDate`).value = formatDate(end);
+        }
+
+        function setLastMonth(prefix) {
+            const now = new Date();
+            const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const end = new Date(now.getFullYear(), now.getMonth(), 0);
+
+            document.getElementById(`${prefix}-startDate`).value = formatDate(start);
+            document.getElementById(`${prefix}-endDate`).value = formatDate(end);
+        }
+
+        function formatDate(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function applyFilter(type) {
+            if (type === 'sales') {
+                loadSalesData();
+            } else {
+                loadSettleData();
+            }
+        }
+
+        async function loadSalesData() {
+            const startDate = document.getElementById('sales-startDate').value;
+            const endDate = document.getElementById('sales-endDate').value;
+
+            try {
+                const [salesResponse, adResponse] = await Promise.all([
+                    fetch(`/api/sales_performance?start_date=${startDate}&end_date=${endDate}`),
+                    fetch(`/api/ad_data?start_date=${startDate}&end_date=${endDate}`)
+                ]);
+
+                const salesResult = await salesResponse.json();
+                const adResult = await adResponse.json();
+
+                if (salesResult.success && adResult.success) {
+                    salesData = salesResult.data;
+                    adData = adResult.data;
+
+                    updateMetrics('sales', salesData, adData);
+                    updateChart('sales');
+                    calculateMarginAnalysis('sales');
+                    lucide.createIcons();
+                }
+            } catch (error) {
+                console.error('데이터 로드 오류:', error);
+            }
+        }
+
+        async function loadSettleData() {
+            const startDate = document.getElementById('settle-startDate').value;
+            const endDate = document.getElementById('settle-endDate').value;
+
+            try {
+                const [settleResponse, adResponse, salesResponse] = await Promise.all([
+                    fetch(`/api/settle_data?start_date=${startDate}&end_date=${endDate}`),
+                    fetch(`/api/ad_data?start_date=${startDate}&end_date=${endDate}`),
+                    fetch(`/api/sales_performance?start_date=${startDate}&end_date=${endDate}`)
+                ]);
+
+                const settleResult = await settleResponse.json();
+                const adResult = await adResponse.json();
+                const salesResult = await salesResponse.json();
+
+                if (settleResult.success && adResult.success) {
+                    settleData = settleResult.data;
+                    adData = adResult.data;
+
+                    // 판매성과 데이터를 쿠폰 할인율 계산에 사용
+                    const salesDataForCoupon = salesResult.success ? salesResult.data : null;
+
+                    updateMetrics('settle', settleData, adData, salesDataForCoupon);
+                    updateChart('settle');
+                    calculateMarginAnalysis('settle');
+                    lucide.createIcons();
+                }
+            } catch (error) {
+                console.error('데이터 로드 오류:', error);
+            }
+        }
+
+        function updateMetrics(type, data, adStats, salesDataForCoupon = null) {
+            const totalStats = data.total_stats;
+            const prefix = type;
+
+            document.getElementById(`${prefix}-totalSales`).textContent = formatCurrency(totalStats.total_gross_sales);
+            document.getElementById(`${prefix}-netSales`).textContent = formatCurrency(totalStats.total_net_sales);
+            document.getElementById(`${prefix}-totalAdCost`).textContent = formatCurrency(adStats.total_stats.total_ad_cost);
+
+            // 정산기준 탭인 경우 판매성과 데이터에서 쿠폰 할인율 가져오기
+            if (type === 'settle' && salesDataForCoupon && salesDataForCoupon.total_stats) {
+                document.getElementById(`${prefix}-couponRate`).textContent = formatPercentage(salesDataForCoupon.total_stats.actual_discount_rate / 100);
+            } else {
+                document.getElementById(`${prefix}-couponRate`).textContent = formatPercentage(totalStats.actual_discount_rate / 100);
+            }
+
+            const days = data.daily_summary.length || 1;
+
+            document.getElementById(`${prefix}-dailyAvgSales`).textContent = formatCurrency(totalStats.total_gross_sales / days);
+            document.getElementById(`${prefix}-dailyAvgNetSales`).textContent = formatCurrency(totalStats.total_net_sales / days);
+            document.getElementById(`${prefix}-dailyAvgAdCost`).textContent = formatCurrency(adStats.total_stats.total_ad_cost / days);
+        }
+
+        function updateChart(type) {
+            const prefix = type;
+            const data = type === 'sales' ? salesData : settleData;
+            const dailySummary = data.daily_summary || [];
+            const dailyAd = adData.daily_summary || [];
+
+            const dateMap = new Map();
+
+            dailySummary.forEach(item => {
+                const dateStr = item.date;
+                if (!dateMap.has(dateStr)) {
+                    dateMap.set(dateStr, {});
+                }
+                dateMap.get(dateStr).payment = item.gross_sales;
+                dateMap.get(dateStr).netSales = item.net_sales;
+            });
+
+            dailyAd.forEach(item => {
+                const dateStr = item.date;
+                if (!dateMap.has(dateStr)) {
+                    dateMap.set(dateStr, {});
+                }
+                dateMap.get(dateStr).adCost = item.total_cost;
+            });
+
+            const dates = Array.from(dateMap.keys()).sort();
+            const payments = dates.map(d => dateMap.get(d).payment || 0);
+            const netSales = dates.map(d => dateMap.get(d).netSales || 0);
+            const adCosts = dates.map(d => dateMap.get(d).adCost || 0);
+
+            const datasets = [];
+
+            if (document.getElementById(`${prefix}-showPayment`).checked) {
+                datasets.push({
+                    label: '결제금액',
+                    data: payments,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                });
+            }
+
+            if (document.getElementById(`${prefix}-showNetSales`).checked) {
+                datasets.push({
+                    label: '순매출',
+                    data: netSales,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                });
+            }
+
+            if (document.getElementById(`${prefix}-showAdCost`).checked) {
+                datasets.push({
+                    label: '광고비',
+                    data: adCosts,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    yAxisID: 'y1'
+                });
+            }
+
+            const chart = type === 'sales' ? salesChart : settleChart;
+            if (chart) {
+                chart.destroy();
+            }
+
+            const ctx = document.getElementById(`${prefix}-mainChart`).getContext('2d');
+            const newChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates.map(d => d.substring(5)),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += formatCurrency(context.parsed.y);
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 10000).toFixed(0) + '만원';
+                                }
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 10000).toFixed(0) + '만원';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (type === 'sales') {
+                salesChart = newChart;
+            } else {
+                settleChart = newChart;
+            }
+        }
+
+        function calculateMarginAnalysis(type) {
+            const prefix = type;
+            const data = type === 'sales' ? salesData : settleData;
+            const totalStats = data.total_stats;
+            const adStats = adData.total_stats;
+
+            if (!totalStats || !adStats) return;
+
+            const netSales = totalStats.total_net_sales;
+            const adCost = adStats.total_ad_cost;
+            const targetPercent = parseFloat(document.getElementById(`${prefix}-targetMargin`).value) || 10;
+
+            const actualMargin = netSales > 0 ? (adCost / netSales) * 100 : 0;
+
+            let adjustedMargin = 0;
+            if (actualMargin > 0) {
+                adjustedMargin = (targetPercent * targetPercent) / actualMargin;
+                adjustedMargin = Math.max(7.5, Math.min(15, adjustedMargin));
+            } else {
+                adjustedMargin = targetPercent;
+            }
+
+            const days = data.daily_summary.length || 1;
+            const dailyTargetAd = (netSales * (adjustedMargin / 100)) / days;
+
+            document.getElementById(`${prefix}-actualMargin`).textContent = actualMargin.toFixed(2) + '%';
+            document.getElementById(`${prefix}-adjustedMargin`).textContent = adjustedMargin.toFixed(2) + '%';
+            document.getElementById(`${prefix}-dailyTargetAd`).textContent = formatCurrency(dailyTargetAd);
+        }
+
+        function formatCurrency(value) {
+            return '₩' + Math.round(value).toLocaleString('ko-KR');
+        }
+
+        function formatPercentage(value) {
+            return (value * 100).toFixed(2) + '%';
+        }
+    </script>
+</body>
+</html>
