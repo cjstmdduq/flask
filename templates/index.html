@@ -794,12 +794,10 @@
 
             // 체크박스 변경 시 자동 차트 업데이트
             document.querySelectorAll(`#${prefix}-showPayment, #${prefix}-showNetSales, #${prefix}-showAdCost, #${prefix}-showPrevYear`).forEach(cb => {
-                cb.addEventListener('change', () => {
-                    if (type === 'sales') {
-                        loadSalesData();
-                    } else {
-                        loadSettleData();
-                    }
+                cb.addEventListener('change', async () => {
+                    // 차트만 업데이트 (데이터 다시 로드하지 않음)
+                    await updateChart(type);
+                    lucide.createIcons();
                 });
             });
 
@@ -1040,12 +1038,12 @@
                     datasets.push({
                         label: '전년도 결제금액',
                         data: prevYearData.payments,
-                        borderColor: '#3b82f6',
+                        borderColor: '#93c5fd',
                         backgroundColor: 'transparent',
                         borderDash: [5, 5],
                         tension: 0.4,
                         fill: false,
-                        pointRadius: 3
+                        pointRadius: 2
                     });
                 }
             }
@@ -1065,12 +1063,12 @@
                     datasets.push({
                         label: '전년도 순매출',
                         data: prevYearData.netSales,
-                        borderColor: '#10b981',
+                        borderColor: '#6ee7b7',
                         backgroundColor: 'transparent',
                         borderDash: [5, 5],
                         tension: 0.4,
                         fill: false,
-                        pointRadius: 3
+                        pointRadius: 2
                     });
                 }
             }
@@ -1091,12 +1089,12 @@
                     datasets.push({
                         label: '전년도 광고비',
                         data: prevYearData.adCosts,
-                        borderColor: '#f59e0b',
+                        borderColor: '#fcd34d',
                         backgroundColor: 'transparent',
                         borderDash: [5, 5],
                         tension: 0.4,
                         fill: false,
-                        pointRadius: 3,
+                        pointRadius: 2,
                         yAxisID: 'y1'
                     });
                 }
@@ -1500,31 +1498,43 @@
                         if (dataMap.has(item.date)) {
                             dataMap.get(item.date).adCost = item.total_cost || 0;
                         } else {
-                            dataMap.set(item.date, { adCost: item.total_cost || 0 });
+                            dataMap.set(item.date, {
+                                payment: 0,
+                                netSales: 0,
+                                adCost: item.total_cost || 0
+                            });
                         }
                     });
                 }
+
+                console.log('Data map created:', dataMap);
 
                 // 현재 날짜 순서에 맞춰 전년도 데이터 정렬
                 const payments = [];
                 const netSales = [];
                 const adCosts = [];
 
-                previousYearDates.forEach(prevDate => {
+                previousYearDates.forEach((prevDate, index) => {
                     const data = dataMap.get(prevDate);
                     if (data) {
                         payments.push(data.payment || 0);
                         netSales.push(data.netSales || 0);
                         adCosts.push(data.adCost || 0);
                     } else {
-                        // 데이터가 없는 경우 null로 표시 (차트에서 연결 안됨)
-                        payments.push(null);
-                        netSales.push(null);
-                        adCosts.push(null);
+                        // 데이터가 없는 경우에도 0으로 표시 (null이면 차트에서 끊김)
+                        payments.push(0);
+                        netSales.push(0);
+                        adCosts.push(0);
                     }
                 });
 
-                console.log('Previous year data mapped:', { payments, netSales, adCosts });
+                console.log('Previous year data mapped:', {
+                    count: payments.length,
+                    payments,
+                    netSales,
+                    adCosts,
+                    hasValidData: payments.some(p => p > 0)
+                });
 
                 return { payments, netSales, adCosts };
             } catch (error) {
