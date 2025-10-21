@@ -27,6 +27,13 @@ def save_history(history_data):
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history_data, f, ensure_ascii=False, indent=2)
 
+
+def normalize_date_value(value):
+    """API 응답용 날짜 값을 ISO 형식 문자열로 정규화"""
+    if pd.isna(value):
+        return None
+    return value.isoformat() if hasattr(value, 'isoformat') else str(value)
+
 @app.route('/')
 def index():
     """메인 대시보드"""
@@ -288,6 +295,7 @@ def get_settle_data():
             'No.': 'count'
         }).reset_index()
         daily_summary.columns = ['date', 'gross_sales', 'net_sales', 'naver_fee', 'sales_fee', 'order_count']
+        daily_summary['date'] = daily_summary['date'].apply(normalize_date_value)
         
         # 전체 통계
         total_gross_sales = float(df['정산기준금액'].sum())
@@ -417,6 +425,7 @@ def get_sales_performance():
             '환불금액': 'sum'
         }).reset_index()
         daily_summary.columns = ['date', 'gross_sales', 'coupon_total', 'refund_amount']
+        daily_summary['date'] = daily_summary['date'].apply(normalize_date_value)
 
         # 순매출 계산 (결제금액 - 환불금액)
         daily_summary['net_sales'] = daily_summary['gross_sales'] - daily_summary['refund_amount']
@@ -488,6 +497,7 @@ def get_ad_data():
             '총비용(VAT포함,원)': 'sum'
         }).reset_index()
         daily_summary.columns = ['date', 'total_cost']
+        daily_summary['date'] = daily_summary['date'].apply(normalize_date_value)
 
         # 캠페인 유형별 집계
         campaign_summary = df.groupby('캠페인유형').agg({

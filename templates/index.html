@@ -7,6 +7,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.0/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
         * {
@@ -368,6 +370,74 @@
         .checkbox-label input {
             margin-right: 0.5rem;
         }
+
+        .chart-expand-btn {
+            background: none;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+
+        .chart-expand-btn:hover {
+            background: #f9fafb;
+            color: #374151;
+        }
+
+        .chart-modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            animation: fadeIn 0.2s;
+        }
+
+        .chart-modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chart-modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 1400px;
+            max-height: 90vh;
+            overflow: auto;
+        }
+
+        .chart-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 0.5rem;
+        }
+
+        .chart-modal-close:hover {
+            color: #1f2937;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -428,10 +498,24 @@
         </div>
     </div>
 
+    <!-- 차트 확대 모달 -->
+    <div id="chartModal" class="chart-modal">
+        <div class="chart-modal-content">
+            <div class="chart-modal-header">
+                <h3 id="chartModalTitle">차트 확대</h3>
+                <button class="chart-modal-close" onclick="closeChartModal()">×</button>
+            </div>
+            <div style="position: relative; height: 600px;">
+                <canvas id="modalChart"></canvas>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let salesChart;
         let settleChart;
+        let modalChart;
         let currentTab = 'sales';
 
         // 데이터 저장소
@@ -538,49 +622,48 @@
                     <div class="col-md-9">
                         <!-- 날짜 필터 -->
                         <div class="date-filter-section">
-                            <div class="date-filter-title">기간 선택</div>
-                            <div class="date-preset-buttons">
-                                <button class="date-preset-btn" data-type="${prefix}" data-days="7">최근 7일</button>
-                                <button class="date-preset-btn active" data-type="${prefix}" data-days="14">최근 14일</button>
-                                <button class="date-preset-btn" data-type="${prefix}" data-days="30">최근 30일</button>
-                                <button class="date-preset-btn" data-type="${prefix}" data-preset="this-month">이번달</button>
-                                <button class="date-preset-btn" data-type="${prefix}" data-preset="last-month">저번달</button>
-                            </div>
+                            <!-- 기간 선택 -->
+                            <div style="margin-bottom: 0.75rem;">
+                                <div class="date-filter-title" style="margin-bottom: 0.5rem;">기간 선택</div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    <button class="date-preset-btn" data-type="${prefix}" data-days="7">최근 7일</button>
+                                    <button class="date-preset-btn active" data-type="${prefix}" data-days="14">최근 14일</button>
+                                    <button class="date-preset-btn" data-type="${prefix}" data-days="30">최근 30일</button>
+                                    <button class="date-preset-btn" data-type="${prefix}" data-preset="this-month">이번달</button>
+                                    <button class="date-preset-btn" data-type="${prefix}" data-preset="last-month">저번달</button>
 
-                            <div class="row mb-3">
-                                <div class="col-md-5">
-                                    <label class="form-label">시작일</label>
-                                    <input type="date" class="form-control ${prefix}-date-input" id="${prefix}-startDate">
-                                </div>
-                                <div class="col-md-5">
-                                    <label class="form-label">종료일</label>
-                                    <input type="date" class="form-control ${prefix}-date-input" id="${prefix}-endDate">
-                                </div>
-                                <div class="col-md-2 d-flex align-items-end">
-                                    <div style="display: flex; gap: 0.25rem; width: 100%;">
-                                        <button class="btn-filter" style="width: 40px; padding: 0.75rem 0;" onclick="navigateDates('${prefix}', -1)" title="이전">
-                                            <i data-lucide="chevron-left"></i>
-                                        </button>
-                                        <button class="btn-filter" style="width: 40px; padding: 0.75rem 0;" onclick="navigateDates('${prefix}', 1)" title="다음">
-                                            <i data-lucide="chevron-right"></i>
-                                        </button>
-                                    </div>
+                                    <span style="color: #d1d5db; margin: 0 0.25rem;">|</span>
+
+                                    <input type="date" class="form-control ${prefix}-date-input" id="${prefix}-startDate" style="width: 150px;">
+                                    <span style="color: #6b7280;">~</span>
+                                    <input type="date" class="form-control ${prefix}-date-input" id="${prefix}-endDate" style="width: 150px;">
+
+                                    <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('${prefix}', -1)" title="이전">
+                                        <i data-lucide="chevron-left"></i>
+                                    </button>
+                                    <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('${prefix}', 1)" title="다음">
+                                        <i data-lucide="chevron-right"></i>
+                                    </button>
                                 </div>
                             </div>
 
-                            <div class="checkbox-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="${prefix}-showPayment" checked> 결제금액
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="${prefix}-showNetSales" checked> 순매출
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="${prefix}-showAdCost" checked> 광고비
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="${prefix}-showPrevYear" checked> 전년도 동일일
-                                </label>
+                            <!-- 표시요소 선택 -->
+                            <div>
+                                <div class="date-filter-title" style="margin-bottom: 0.5rem;">표시요소 선택</div>
+                                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="${prefix}-showPayment" checked> 결제금액
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="${prefix}-showNetSales" checked> 순매출
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="${prefix}-showAdCost" checked> 광고비
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="${prefix}-showPrevYear" checked> 전년도 동일일
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
@@ -588,19 +671,24 @@
                         <div class="chart-container">
                             <div class="chart-header">
                                 <div class="chart-title">결제일 매출 & 광고비 추세</div>
-                                <div class="chart-legend">
-                                    <div class="legend-item">
-                                        <div class="legend-color" style="background: #3b82f6;"></div>
-                                        결제금액
+                                <div style="display: flex; align-items: center; gap: 1rem;">
+                                    <div class="chart-legend">
+                                        <div class="legend-item">
+                                            <div class="legend-color" style="background: #3b82f6;"></div>
+                                            결제금액
+                                        </div>
+                                        <div class="legend-item">
+                                            <div class="legend-color" style="background: #10b981;"></div>
+                                            순매출
+                                        </div>
+                                        <div class="legend-item">
+                                            <div class="legend-color" style="background: #f59e0b;"></div>
+                                            광고비
+                                        </div>
                                     </div>
-                                    <div class="legend-item">
-                                        <div class="legend-color" style="background: #10b981;"></div>
-                                        순매출
-                                    </div>
-                                    <div class="legend-item">
-                                        <div class="legend-color" style="background: #f59e0b;"></div>
-                                        광고비
-                                    </div>
+                                    <button class="chart-expand-btn" onclick="openChartModal('${prefix}')" title="확대">
+                                        <i data-lucide="maximize-2" style="width: 16px; height: 16px;"></i>
+                                    </button>
                                 </div>
                             </div>
                             <canvas id="${prefix}-mainChart" height="80"></canvas>
@@ -638,6 +726,26 @@
                             <div class="highlighted-result">
                                 <div class="analysis-label">일평균 적정 광고비</div>
                                 <div class="highlighted-result-value" id="${prefix}-dailyTargetAd">₩0</div>
+                            </div>
+
+                            <div class="highlighted-result" style="background: #f3f4f6; margin-top: 0.75rem;">
+                                <div class="analysis-label">집계기간별 적정광고비</div>
+                                <div style="margin-bottom: 0.5rem;">
+                                    <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem;">7일 기준</div>
+                                    <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937;" id="${prefix}-dailyTargetAd7">₩0</div>
+                                </div>
+                                <div style="margin-bottom: 0.5rem;">
+                                    <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem;">14일 기준</div>
+                                    <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937;" id="${prefix}-dailyTargetAd14">₩0</div>
+                                </div>
+                                <div style="margin-bottom: 0.5rem;">
+                                    <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem;">30일 기준</div>
+                                    <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937;" id="${prefix}-dailyTargetAd30">₩0</div>
+                                </div>
+                                <div style="border-top: 1px solid #d1d5db; padding-top: 0.5rem; margin-top: 0.5rem;">
+                                    <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem;">평균값</div>
+                                    <div style="font-size: 1.25rem; font-weight: 700; color: #1f2937;" id="${prefix}-dailyTargetAdAvg">₩0</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -815,7 +923,7 @@
 
                     updateMetrics('sales', salesData, adData);
                     updateChart('sales');
-                    calculateMarginAnalysis('sales');
+                    await calculateMarginAnalysis('sales');
                     lucide.createIcons();
                 }
             } catch (error) {
@@ -847,7 +955,7 @@
 
                     updateMetrics('settle', settleData, adData, salesDataForCoupon);
                     updateChart('settle');
-                    calculateMarginAnalysis('settle');
+                    await calculateMarginAnalysis('settle');
                     lucide.createIcons();
                 }
             } catch (error) {
@@ -1013,23 +1121,6 @@
                         mode: 'index',
                         intersect: false,
                     },
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    label += formatCurrency(context.parsed.y);
-                                    return label;
-                                }
-                            }
-                        }
-                    },
                     scales: {
                         y: {
                             type: 'linear',
@@ -1045,12 +1136,45 @@
                             type: 'linear',
                             display: true,
                             position: 'right',
+                            min: 0,
                             grid: {
                                 drawOnChartArea: false,
                             },
                             ticks: {
                                 callback: function(value) {
                                     return (value / 10000).toFixed(0) + '만원';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        zoom: {
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'x',
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'x',
+                            }
+                        },
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += formatCurrency(context.parsed.y);
+                                    return label;
                                 }
                             }
                         }
@@ -1065,7 +1189,7 @@
             }
         }
 
-        function calculateMarginAnalysis(type) {
+        async function calculateMarginAnalysis(type) {
             const prefix = type;
             const data = type === 'sales' ? salesData : settleData;
             const totalStats = data.total_stats;
@@ -1093,6 +1217,67 @@
             document.getElementById(`${prefix}-actualMargin`).textContent = actualMargin.toFixed(2) + '%';
             document.getElementById(`${prefix}-adjustedMargin`).textContent = adjustedMargin.toFixed(2) + '%';
             document.getElementById(`${prefix}-dailyTargetAd`).textContent = formatCurrency(dailyTargetAd);
+
+            // 고급 분석: 7일, 14일, 30일 기준 평균값 계산
+            await calculateAdvancedMarginAnalysis(type, adjustedMargin);
+        }
+
+        async function calculateAdvancedMarginAnalysis(type, adjustedMargin) {
+            const prefix = type;
+            const today = new Date();
+            today.setDate(today.getDate() - 1); // 어제까지
+
+            const periods = [7, 14, 30];
+            const results = [];
+
+            for (const period of periods) {
+                const endDate = new Date(today);
+                const startDate = new Date(today);
+                startDate.setDate(today.getDate() - (period - 1));
+
+                try {
+                    const apiUrl = type === 'sales' ? '/api/sales_performance' : '/api/settle_data';
+                    const [dataResponse, adResponse] = await Promise.all([
+                        fetch(`${apiUrl}?start_date=${formatDate(startDate)}&end_date=${formatDate(endDate)}`),
+                        fetch(`/api/ad_data?start_date=${formatDate(startDate)}&end_date=${formatDate(endDate)}`)
+                    ]);
+
+                    const dataResult = await dataResponse.json();
+                    const adResult = await adResponse.json();
+
+                    if (dataResult.success && adResult.success) {
+                        const periodNetSales = dataResult.data.total_stats.total_net_sales;
+                        const periodAdCost = adResult.data.total_stats.total_ad_cost;
+                        const targetPercent = parseFloat(document.getElementById(`${prefix}-targetMargin`).value) || 10;
+
+                        // 각 기간별로 독립적으로 보정비율 계산
+                        const periodActualMargin = periodNetSales > 0 ? (periodAdCost / periodNetSales) * 100 : 0;
+                        let periodAdjustedMargin = 0;
+                        if (periodActualMargin > 0) {
+                            periodAdjustedMargin = (targetPercent * targetPercent) / periodActualMargin;
+                            periodAdjustedMargin = Math.max(7.5, Math.min(15, periodAdjustedMargin));
+                        } else {
+                            periodAdjustedMargin = targetPercent;
+                        }
+
+                        const dailyTargetAdPeriod = (periodNetSales * (periodAdjustedMargin / 100)) / period;
+                        results.push(dailyTargetAdPeriod);
+
+                        document.getElementById(`${prefix}-dailyTargetAd${period}`).textContent = formatCurrency(dailyTargetAdPeriod);
+                    } else {
+                        results.push(0);
+                        document.getElementById(`${prefix}-dailyTargetAd${period}`).textContent = '₩0';
+                    }
+                } catch (error) {
+                    console.error(`${period}일 기준 데이터 로드 오류:`, error);
+                    results.push(0);
+                    document.getElementById(`${prefix}-dailyTargetAd${period}`).textContent = '₩0';
+                }
+            }
+
+            // 평균값 계산
+            const average = results.length > 0 ? results.reduce((a, b) => a + b, 0) / results.length : 0;
+            document.getElementById(`${prefix}-dailyTargetAdAvg`).textContent = formatCurrency(average);
         }
 
         function formatCurrency(value) {
@@ -1102,6 +1287,169 @@
         function formatPercentage(value) {
             return (value * 100).toFixed(2) + '%';
         }
+
+        function openChartModal(type) {
+            const data = type === 'sales' ? salesData : settleData;
+            const dailySummary = data.daily_summary || [];
+            const dailyAd = adData.daily_summary || [];
+
+            const dateMap = new Map();
+
+            dailySummary.forEach(item => {
+                const dateStr = item.date;
+                if (!dateMap.has(dateStr)) {
+                    dateMap.set(dateStr, {});
+                }
+                dateMap.get(dateStr).payment = item.gross_sales;
+                dateMap.get(dateStr).netSales = item.net_sales;
+            });
+
+            dailyAd.forEach(item => {
+                const dateStr = item.date;
+                if (!dateMap.has(dateStr)) {
+                    dateMap.set(dateStr, {});
+                }
+                dateMap.get(dateStr).adCost = item.total_cost;
+            });
+
+            const dates = Array.from(dateMap.keys()).sort();
+            const payments = dates.map(d => dateMap.get(d).payment || 0);
+            const netSales = dates.map(d => dateMap.get(d).netSales || 0);
+            const adCosts = dates.map(d => dateMap.get(d).adCost || 0);
+
+            const datasets = [
+                {
+                    label: '결제금액',
+                    data: payments,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: '순매출',
+                    data: netSales,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: '광고비',
+                    data: adCosts,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    yAxisID: 'y1'
+                }
+            ];
+
+            if (modalChart) {
+                modalChart.destroy();
+            }
+
+            const ctx = document.getElementById('modalChart').getContext('2d');
+            modalChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates.map(d => formatDateWithWeekday(d)),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 10000).toFixed(0) + '만원';
+                                }
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            min: 0,
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 10000).toFixed(0) + '만원';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        zoom: {
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'x',
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'x',
+                            }
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += formatCurrency(context.parsed.y);
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('chartModalTitle').textContent = type === 'sales' ? '판매성과 차트' : '정산기준 차트';
+            document.getElementById('chartModal').classList.add('active');
+        }
+
+        function closeChartModal() {
+            document.getElementById('chartModal').classList.remove('active');
+            if (modalChart) {
+                modalChart.destroy();
+                modalChart = null;
+            }
+        }
+
+        // ESC 키로 모달 닫기
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeChartModal();
+            }
+        });
+
+        // 모달 배경 클릭으로 닫기
+        document.getElementById('chartModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeChartModal();
+            }
+        });
 
         async function loadPreviousYearData(type, currentDates) {
             if (!currentDates || currentDates.length === 0) {
