@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>플라스크 - 데이터 대시보드</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.82em' x='0.5em' text-anchor='middle' font-size='84'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
@@ -77,7 +78,6 @@
         .sidebar-menu-item.active {
             background: #f3f4f6;
             color: #1f2937;
-            border-left-color: #374151;
         }
 
         .content-area {
@@ -302,16 +302,51 @@
         }
 
         .highlighted-result {
-            background: #f9fafb;
-            padding: 1rem;
             border-radius: 6px;
             margin-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+            padding: 1rem 0 0;
+        }
+
+        .analysis-section .highlighted-result:first-of-type {
+            border-top: none;
+            padding-top: 0;
         }
 
         .highlighted-result-value {
-            font-size: 1.5rem;
+            font-size: 1.6rem;
             font-weight: 700;
             color: #1f2937;
+        }
+
+        .analysis-hidden {
+            display: none !important;
+        }
+
+        .sub-result-value {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .highlighted-period-group {
+            margin-bottom: 0.5rem;
+        }
+
+        .highlighted-period-group:last-of-type {
+            margin-bottom: 0;
+        }
+
+        .highlighted-period-label {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+        }
+
+        .highlighted-average {
+            border-top: 1px solid #d1d5db;
+            padding-top: 0.5rem;
+            margin-top: 0.5rem;
         }
 
         .btn-filter {
@@ -414,6 +449,71 @@
             overflow: auto;
         }
 
+        .chart-modal-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1.25rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f9fafb;
+        }
+
+        .chart-modal-controls .modal-control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            min-width: 140px;
+        }
+
+        .modal-control-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .modal-filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .modal-nav-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chart-modal-controls label {
+            font-size: 0.75rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .chart-modal-controls input[type="date"],
+        .chart-modal-controls input[type="checkbox"] {
+            font-size: 0.875rem;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+        }
+
+        .chart-modal-checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .chart-modal-checkboxes .checkbox-label {
+            font-size: 0.8125rem;
+            display: flex;
+            align-items: center;
+        }
+
         .chart-modal-header {
             display: flex;
             justify-content: space-between;
@@ -443,10 +543,7 @@
 <body>
     <nav class="navbar">
         <div class="container-fluid">
-            <span class="navbar-brand">
-                <i data-lucide="flask" style="width: 24px; height: 24px;"></i>
-                플라스크
-            </span>
+            <span class="navbar-brand">📊 플라스크 대시보드</span>
             <span class="text-muted small">데이터 대시보드</span>
         </div>
     </nav>
@@ -505,6 +602,7 @@
                 <h3 id="chartModalTitle">차트 확대</h3>
                 <button class="chart-modal-close" onclick="closeChartModal()">×</button>
             </div>
+            <div id="chartModalControls" class="chart-modal-controls"></div>
             <div style="position: relative; height: 600px;">
                 <canvas id="modalChart"></canvas>
             </div>
@@ -517,6 +615,11 @@
         let settleChart;
         let modalChart;
         let currentTab = 'sales';
+        let activeModalType = null;
+        const chartCache = {
+            sales: null,
+            settle: null
+        };
 
         // 데이터 저장소
         let salesData = { total_stats: {}, daily_summary: [] };
@@ -723,28 +826,28 @@
                                 </div>
                             </div>
 
-                            <div class="highlighted-result">
-                                <div class="analysis-label">일평균 적정 광고비</div>
+                            <div class="highlighted-result analysis-hidden">
+                                <div class="analysis-label">해당기간 적정 광고비</div>
                                 <div class="highlighted-result-value" id="${prefix}-dailyTargetAd">₩0</div>
                             </div>
 
-                            <div class="highlighted-result" style="background: #f3f4f6; margin-top: 0.75rem;">
+                            <div class="highlighted-result">
                                 <div class="analysis-label">집계기간별 적정광고비</div>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem;">7일 기준</div>
-                                    <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937;" id="${prefix}-dailyTargetAd7">₩0</div>
+                                <div class="highlighted-period-group">
+                                    <div class="highlighted-period-label">7일 기준</div>
+                                    <div class="sub-result-value" id="${prefix}-dailyTargetAd7">₩0</div>
                                 </div>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem;">14일 기준</div>
-                                    <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937;" id="${prefix}-dailyTargetAd14">₩0</div>
+                                <div class="highlighted-period-group">
+                                    <div class="highlighted-period-label">14일 기준</div>
+                                    <div class="sub-result-value" id="${prefix}-dailyTargetAd14">₩0</div>
                                 </div>
-                                <div style="margin-bottom: 0.5rem;">
-                                    <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem;">30일 기준</div>
-                                    <div style="font-size: 1.125rem; font-weight: 600; color: #1f2937;" id="${prefix}-dailyTargetAd30">₩0</div>
+                                <div class="highlighted-period-group">
+                                    <div class="highlighted-period-label">30일 기준</div>
+                                    <div class="sub-result-value" id="${prefix}-dailyTargetAd30">₩0</div>
                                 </div>
-                                <div style="border-top: 1px solid #d1d5db; padding-top: 0.5rem; margin-top: 0.5rem;">
-                                    <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem;">평균값</div>
-                                    <div style="font-size: 1.25rem; font-weight: 700; color: #1f2937;" id="${prefix}-dailyTargetAdAvg">₩0</div>
+                                <div class="highlighted-average">
+                                    <div class="highlighted-period-label">최종 평균값</div>
+                                    <div class="highlighted-result-value" id="${prefix}-dailyTargetAdAvg">₩0</div>
                                 </div>
                             </div>
                         </div>
@@ -784,10 +887,13 @@
             // 날짜 입력 변경 시 자동 필터 적용
             document.querySelectorAll(`.${prefix}-date-input`).forEach(input => {
                 input.addEventListener('change', () => {
-                    if (type === 'sales') {
-                        loadSalesData();
-                    } else {
-                        loadSettleData();
+                    // 현재 활성화된 탭에서만 데이터 로드
+                    if (currentTab === type) {
+                        if (type === 'sales') {
+                            loadSalesData();
+                        } else {
+                            loadSettleData();
+                        }
                     }
                 });
             });
@@ -795,17 +901,24 @@
             // 체크박스 변경 시 자동 차트 업데이트
             document.querySelectorAll(`#${prefix}-showPayment, #${prefix}-showNetSales, #${prefix}-showAdCost, #${prefix}-showPrevYear`).forEach(cb => {
                 cb.addEventListener('change', async () => {
-                    // 데이터가 있을 때만 차트 업데이트
-                    const data = type === 'sales' ? salesData : settleData;
-                    if (data && data.daily_summary && data.daily_summary.length > 0) {
-                        await updateChart(type);
-                        lucide.createIcons();
+                    console.log(`Checkbox changed for ${type}, currentTab: ${currentTab}`);
+                    // 현재 활성화된 탭에서만 차트 업데이트
+                    if (currentTab === type) {
+                        const data = type === 'sales' ? salesData : settleData;
+                        if (data && data.daily_summary && data.daily_summary.length > 0) {
+                            await updateChart(type);
+                            lucide.createIcons();
+                        }
                     }
                 });
             });
 
             // 목표 광고비율 변경
-            document.getElementById(`${prefix}-targetMargin`).addEventListener('input', () => calculateMarginAnalysis(type));
+            document.getElementById(`${prefix}-targetMargin`).addEventListener('input', () => {
+                if (currentTab === type) {
+                    calculateMarginAnalysis(type);
+                }
+            });
 
             // 초기 날짜 설정 (14일로 변경)
             setDateRange(prefix, 14);
@@ -842,6 +955,29 @@
 
         function formatDate(date) {
             return date.toISOString().split('T')[0];
+        }
+
+        function getDateRangeInclusive(startDateStr, endDateStr) {
+            if (!startDateStr || !endDateStr) {
+                return [];
+            }
+
+            const startDate = new Date(startDateStr);
+            const endDate = new Date(endDateStr);
+
+            if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || startDate > endDate) {
+                return [];
+            }
+
+            const dates = [];
+            const cursor = new Date(startDate);
+
+            while (cursor <= endDate) {
+                dates.push(formatDate(cursor));
+                cursor.setDate(cursor.getDate() + 1);
+            }
+
+            return dates;
         }
 
         function formatDateWithWeekday(dateStr) {
@@ -986,11 +1122,46 @@
             document.getElementById(`${prefix}-dailyAvgAdCost`).textContent = formatCurrency(adStats.total_stats.total_ad_cost / days);
         }
 
-        async function updateChart(type) {
+        function cloneDatasets(datasets) {
+            return datasets.map(dataset => {
+                const cloned = { ...dataset };
+                if (Array.isArray(dataset.data)) {
+                    cloned.data = [...dataset.data];
+                }
+                if (Array.isArray(dataset.borderDash)) {
+                    cloned.borderDash = [...dataset.borderDash];
+                }
+                return cloned;
+            });
+        }
+
+        function buildTooltipLabel(context) {
+            let label = context.dataset.label || '';
+            if (!Number.isFinite(context.parsed.y)) {
+                return label ? `${label}: 데이터 없음` : '데이터 없음';
+            }
+            if (label) {
+                label += ': ';
+            }
+            label += formatCurrency(context.parsed.y);
+            return label;
+        }
+
+        async function buildChartData(type) {
             const prefix = type;
             const data = type === 'sales' ? salesData : settleData;
+            const adSummary = adData || {};
+
+            if (!data || !adSummary) {
+                return {
+                    labels: [],
+                    datasets: [],
+                    rawDates: []
+                };
+            }
+
             const dailySummary = data.daily_summary || [];
-            const dailyAd = adData.daily_summary || [];
+            const dailyAd = adSummary.daily_summary || [];
 
             const dateMap = new Map();
 
@@ -999,8 +1170,8 @@
                 if (!dateMap.has(dateStr)) {
                     dateMap.set(dateStr, {});
                 }
-                dateMap.get(dateStr).payment = item.gross_sales;
-                dateMap.get(dateStr).netSales = item.net_sales;
+                dateMap.get(dateStr).payment = item.gross_sales ?? null;
+                dateMap.get(dateStr).netSales = item.net_sales ?? null;
             });
 
             dailyAd.forEach(item => {
@@ -1008,25 +1179,50 @@
                 if (!dateMap.has(dateStr)) {
                     dateMap.set(dateStr, {});
                 }
-                dateMap.get(dateStr).adCost = item.total_cost;
+                dateMap.get(dateStr).adCost = item.total_cost ?? null;
             });
 
-            const dates = Array.from(dateMap.keys()).sort();
-            const payments = dates.map(d => dateMap.get(d).payment || 0);
-            const netSales = dates.map(d => dateMap.get(d).netSales || 0);
-            const adCosts = dates.map(d => dateMap.get(d).adCost || 0);
+            const startInputEl = document.getElementById(`${prefix}-startDate`);
+            const endInputEl = document.getElementById(`${prefix}-endDate`);
+            const selectedStartDate = startInputEl ? startInputEl.value : '';
+            const selectedEndDate = endInputEl ? endInputEl.value : '';
 
-            const datasets = [];
+            const requestedDates = getDateRangeInclusive(selectedStartDate, selectedEndDate);
+            const dataDates = Array.from(dateMap.keys()).sort();
 
-            // 전년도 동요일 데이터 로드 (체크박스가 선택된 경우)
+            const combinedDates = new Set(requestedDates.length ? requestedDates : dataDates);
+            dataDates.forEach(dateStr => combinedDates.add(dateStr));
+
+            const dates = Array.from(combinedDates).sort();
+
+            const payments = dates.map(dateStr => {
+                const entry = dateMap.get(dateStr);
+                return entry && entry.payment != null ? entry.payment : null;
+            });
+            const netSales = dates.map(dateStr => {
+                const entry = dateMap.get(dateStr);
+                return entry && entry.netSales != null ? entry.netSales : null;
+            });
+            const adCosts = dates.map(dateStr => {
+                const entry = dateMap.get(dateStr);
+                return entry && entry.adCost != null ? entry.adCost : null;
+            });
+
+            const showPrevYear = Boolean(document.getElementById(`${prefix}-showPrevYear`)?.checked);
+            const showPayment = Boolean(document.getElementById(`${prefix}-showPayment`)?.checked);
+            const showNetSales = Boolean(document.getElementById(`${prefix}-showNetSales`)?.checked);
+            const showAdCost = Boolean(document.getElementById(`${prefix}-showAdCost`)?.checked);
+
             let prevYearData = null;
-            if (document.getElementById(`${prefix}-showPrevYear`).checked) {
+            if (showPrevYear && dates.length > 0) {
                 console.log('Loading previous year data for type:', type);
                 prevYearData = await loadPreviousYearData(type, dates);
                 console.log('Previous year data loaded:', prevYearData);
             }
 
-            if (document.getElementById(`${prefix}-showPayment`).checked) {
+            const datasets = [];
+
+            if (showPayment) {
                 datasets.push({
                     label: '결제금액',
                     data: payments,
@@ -1036,7 +1232,6 @@
                     fill: true
                 });
 
-                // 전년도 동요일 결제금액 (점선)
                 if (prevYearData) {
                     datasets.push({
                         label: '전년도 결제금액',
@@ -1051,7 +1246,7 @@
                 }
             }
 
-            if (document.getElementById(`${prefix}-showNetSales`).checked) {
+            if (showNetSales) {
                 datasets.push({
                     label: '순매출',
                     data: netSales,
@@ -1061,7 +1256,6 @@
                     fill: true
                 });
 
-                // 전년도 동요일 순매출 (점선)
                 if (prevYearData) {
                     datasets.push({
                         label: '전년도 순매출',
@@ -1076,7 +1270,7 @@
                 }
             }
 
-            if (document.getElementById(`${prefix}-showAdCost`).checked) {
+            if (showAdCost) {
                 datasets.push({
                     label: '광고비',
                     data: adCosts,
@@ -1087,7 +1281,6 @@
                     yAxisID: 'y1'
                 });
 
-                // 전년도 동요일 광고비 (점선)
                 if (prevYearData) {
                     datasets.push({
                         label: '전년도 광고비',
@@ -1108,7 +1301,7 @@
                 datasets: datasets.map(d => ({
                     label: d.label,
                     dataLength: d.data.length,
-                    hasData: d.data.some(v => v > 0),
+                    hasData: d.data.some(v => typeof v === 'number' && v > 0),
                     firstValues: d.data.slice(0, 3),
                     borderColor: d.borderColor,
                     borderDash: d.borderDash
@@ -1117,6 +1310,19 @@
                 firstLabels: dates.slice(0, 3)
             });
 
+            return {
+                labels: dates.map(d => formatDateWithWeekday(d)),
+                datasets,
+                rawDates: dates
+            };
+        }
+
+        function isModalActiveFor(type) {
+            return activeModalType === type && document.getElementById('chartModal').classList.contains('active');
+        }
+
+        function renderMainChart(type, chartData) {
+            const prefix = type;
             const chart = type === 'sales' ? salesChart : settleChart;
             if (chart) {
                 chart.destroy();
@@ -1126,12 +1332,13 @@
             const newChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: dates.map(d => formatDateWithWeekday(d)),
-                    datasets: datasets
+                    labels: chartData.labels,
+                    datasets: cloneDatasets(chartData.datasets)
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
+                    animation: false,
                     interaction: {
                         mode: 'index',
                         intersect: false,
@@ -1184,12 +1391,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    label += formatCurrency(context.parsed.y);
-                                    return label;
+                                    return buildTooltipLabel(context);
                                 }
                             }
                         }
@@ -1201,6 +1403,210 @@
                 salesChart = newChart;
             } else {
                 settleChart = newChart;
+            }
+        }
+
+        function renderModalControls(type) {
+            const container = document.getElementById('chartModalControls');
+            if (!container) {
+                return;
+            }
+
+            const prefix = type;
+
+            container.innerHTML = `
+                <div class="modal-control-row">
+                    <div class="modal-control-group" style="flex: 1 1 100%;">
+                        <div class="date-filter-title" style="margin-bottom: 0.5rem;">기간 선택</div>
+                        <div class="modal-filter-row">
+                            <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-days="7">최근 7일</button>
+                            <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-days="14">최근 14일</button>
+                            <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-days="30">최근 30일</button>
+                            <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-preset="this-month">이번달</button>
+                            <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-preset="last-month">저번달</button>
+                            <span style="color: #d1d5db; margin: 0 0.25rem;">|</span>
+                            <input type="date" id="modal-${prefix}-startDate" class="form-control modal-date-input" style="width: 150px;">
+                            <span style="color: #6b7280;">~</span>
+                            <input type="date" id="modal-${prefix}-endDate" class="form-control modal-date-input" style="width: 150px;">
+                            <button class="btn-filter modal-nav-btn" style="width: 36px; padding: 0.5rem;" onclick="navigateModalDates('${prefix}', -1)" title="이전">
+                                <i data-lucide="chevron-left"></i>
+                            </button>
+                            <button class="btn-filter modal-nav-btn" style="width: 36px; padding: 0.5rem;" onclick="navigateModalDates('${prefix}', 1)" title="다음">
+                                <i data-lucide="chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-control-row">
+                    <div class="modal-control-group" style="flex: 1 1 100%;">
+                        <div class="date-filter-title" style="margin-bottom: 0.5rem;">표시요소 선택</div>
+                        <div class="chart-modal-checkboxes">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="modal-${prefix}-showPayment"> 결제금액
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="modal-${prefix}-showNetSales"> 순매출
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="modal-${prefix}-showAdCost"> 광고비
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="modal-${prefix}-showPrevYear"> 전년도
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            attachModalControlListeners(type);
+            syncModalControlValues(type);
+            lucide.createIcons();
+        }
+
+        function syncModalControlValues(type) {
+            const container = document.getElementById('chartModalControls');
+            if (!container) {
+                return;
+            }
+
+            const prefix = type;
+            const baseStart = document.getElementById(`${prefix}-startDate`);
+            const baseEnd = document.getElementById(`${prefix}-endDate`);
+
+            const modalStart = container.querySelector(`#modal-${prefix}-startDate`);
+            const modalEnd = container.querySelector(`#modal-${prefix}-endDate`);
+
+            if (modalStart && baseStart) {
+                modalStart.value = baseStart.value || '';
+            }
+
+            if (modalEnd && baseEnd) {
+                modalEnd.value = baseEnd.value || '';
+            }
+
+            const checkboxIds = ['showPayment', 'showNetSales', 'showAdCost', 'showPrevYear'];
+            checkboxIds.forEach(id => {
+                const modalCheckbox = container.querySelector(`#modal-${prefix}-${id}`);
+                const baseCheckbox = document.getElementById(`${prefix}-${id}`);
+                if (modalCheckbox && baseCheckbox) {
+                    modalCheckbox.checked = baseCheckbox.checked;
+                }
+            });
+
+            updateModalPresetActive(type);
+        }
+
+        function attachModalControlListeners(type) {
+            const container = document.getElementById('chartModalControls');
+            if (!container) {
+                return;
+            }
+
+            const prefix = type;
+
+            const startInput = container.querySelector(`#modal-${prefix}-startDate`);
+            const endInput = container.querySelector(`#modal-${prefix}-endDate`);
+
+            const baseStart = document.getElementById(`${prefix}-startDate`);
+            const baseEnd = document.getElementById(`${prefix}-endDate`);
+
+            if (startInput && baseStart) {
+                startInput.addEventListener('change', () => {
+                    baseStart.value = startInput.value;
+                    baseStart.dispatchEvent(new Event('change'));
+                });
+            }
+
+            if (endInput && baseEnd) {
+                endInput.addEventListener('change', () => {
+                    baseEnd.value = endInput.value;
+                    baseEnd.dispatchEvent(new Event('change'));
+                });
+            }
+
+            const checkboxIds = ['showPayment', 'showNetSales', 'showAdCost', 'showPrevYear'];
+            checkboxIds.forEach(id => {
+                const modalCheckbox = container.querySelector(`#modal-${prefix}-${id}`);
+                const baseCheckbox = document.getElementById(`${prefix}-${id}`);
+                if (modalCheckbox && baseCheckbox) {
+                    modalCheckbox.addEventListener('change', () => {
+                        baseCheckbox.checked = modalCheckbox.checked;
+                        baseCheckbox.dispatchEvent(new Event('change'));
+                    });
+                }
+            });
+
+            const presetButtons = container.querySelectorAll('.modal-preset-btn');
+            presetButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const { days, preset } = button.dataset;
+                    let selector = `.date-preset-btn[data-type="${prefix}"]`;
+                    if (days) {
+                        selector += `[data-days="${days}"]`;
+                    } else if (preset) {
+                        selector += `[data-preset="${preset}"]`;
+                    }
+
+                    const baseButton = document.querySelector(selector);
+                    if (baseButton) {
+                        baseButton.click();
+                    } else {
+                        if (days) {
+                            setDateRange(prefix, parseInt(days, 10));
+                        } else if (preset === 'this-month') {
+                            setThisMonth(prefix);
+                        } else if (preset === 'last-month') {
+                            setLastMonth(prefix);
+                        }
+
+                        if (prefix === 'sales') {
+                            loadSalesData();
+                        } else {
+                            loadSettleData();
+                        }
+                    }
+
+                    updateModalPresetActive(type);
+                    syncModalControlValues(type);
+                });
+            });
+        }
+
+        function updateModalPresetActive(type) {
+            const container = document.getElementById('chartModalControls');
+            if (!container) {
+                return;
+            }
+
+            const prefix = type;
+            const baseActive = document.querySelector(`.date-preset-btn[data-type="${prefix}"].active`);
+
+            container.querySelectorAll('.modal-preset-btn').forEach(btn => {
+                if (!baseActive) {
+                    btn.classList.remove('active');
+                    return;
+                }
+
+                const matchesDays = baseActive.dataset.days && btn.dataset.days && baseActive.dataset.days === btn.dataset.days;
+                const matchesPreset = baseActive.dataset.preset && btn.dataset.preset && baseActive.dataset.preset === btn.dataset.preset;
+
+                btn.classList.toggle('active', Boolean(matchesDays || matchesPreset));
+            });
+        }
+
+        function navigateModalDates(type, direction) {
+            navigateDates(type, direction);
+            syncModalControlValues(type);
+        }
+
+        async function updateChart(type) {
+            const chartData = await buildChartData(type);
+            chartCache[type] = chartData;
+            renderMainChart(type, chartData);
+
+            if (isModalActiveFor(type)) {
+                renderModalChart(type, chartData);
+                syncModalControlValues(type);
             }
         }
 
@@ -1303,62 +1709,10 @@
             return (value * 100).toFixed(2) + '%';
         }
 
-        function openChartModal(type) {
-            const data = type === 'sales' ? salesData : settleData;
-            const dailySummary = data.daily_summary || [];
-            const dailyAd = adData.daily_summary || [];
-
-            const dateMap = new Map();
-
-            dailySummary.forEach(item => {
-                const dateStr = item.date;
-                if (!dateMap.has(dateStr)) {
-                    dateMap.set(dateStr, {});
-                }
-                dateMap.get(dateStr).payment = item.gross_sales;
-                dateMap.get(dateStr).netSales = item.net_sales;
-            });
-
-            dailyAd.forEach(item => {
-                const dateStr = item.date;
-                if (!dateMap.has(dateStr)) {
-                    dateMap.set(dateStr, {});
-                }
-                dateMap.get(dateStr).adCost = item.total_cost;
-            });
-
-            const dates = Array.from(dateMap.keys()).sort();
-            const payments = dates.map(d => dateMap.get(d).payment || 0);
-            const netSales = dates.map(d => dateMap.get(d).netSales || 0);
-            const adCosts = dates.map(d => dateMap.get(d).adCost || 0);
-
-            const datasets = [
-                {
-                    label: '결제금액',
-                    data: payments,
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                },
-                {
-                    label: '순매출',
-                    data: netSales,
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                },
-                {
-                    label: '광고비',
-                    data: adCosts,
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y1'
-                }
-            ];
+        function renderModalChart(type, chartData) {
+            if (!chartData) {
+                return;
+            }
 
             if (modalChart) {
                 modalChart.destroy();
@@ -1368,12 +1722,13 @@
             modalChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: dates.map(d => formatDateWithWeekday(d)),
-                    datasets: datasets
+                    labels: chartData.labels,
+                    datasets: cloneDatasets(chartData.datasets)
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: false,
                     interaction: {
                         mode: 'index',
                         intersect: false,
@@ -1427,12 +1782,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    label += formatCurrency(context.parsed.y);
-                                    return label;
+                                    return buildTooltipLabel(context);
                                 }
                             }
                         }
@@ -1440,8 +1790,23 @@
                 }
             });
 
+            syncModalControlValues(type);
+        }
+
+        async function openChartModal(type) {
+            activeModalType = type;
             document.getElementById('chartModalTitle').textContent = type === 'sales' ? '판매성과 차트' : '정산기준 차트';
             document.getElementById('chartModal').classList.add('active');
+            renderModalControls(type);
+
+            const cached = chartCache[type];
+            if (cached) {
+                renderModalChart(type, cached);
+            } else {
+                const chartData = await buildChartData(type);
+                chartCache[type] = chartData;
+                renderModalChart(type, chartData);
+            }
         }
 
         function closeChartModal() {
@@ -1449,6 +1814,11 @@
             if (modalChart) {
                 modalChart.destroy();
                 modalChart = null;
+            }
+            activeModalType = null;
+            const container = document.getElementById('chartModalControls');
+            if (container) {
+                container.innerHTML = '';
             }
         }
 
