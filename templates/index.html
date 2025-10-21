@@ -795,9 +795,12 @@
             // 체크박스 변경 시 자동 차트 업데이트
             document.querySelectorAll(`#${prefix}-showPayment, #${prefix}-showNetSales, #${prefix}-showAdCost, #${prefix}-showPrevYear`).forEach(cb => {
                 cb.addEventListener('change', async () => {
-                    // 차트만 업데이트 (데이터 다시 로드하지 않음)
-                    await updateChart(type);
-                    lucide.createIcons();
+                    // 데이터가 있을 때만 차트 업데이트
+                    const data = type === 'sales' ? salesData : settleData;
+                    if (data && data.daily_summary && data.daily_summary.length > 0) {
+                        await updateChart(type);
+                        lucide.createIcons();
+                    }
                 });
             });
 
@@ -1099,6 +1102,20 @@
                     });
                 }
             }
+
+            console.log('Creating chart with datasets:', {
+                datasetCount: datasets.length,
+                datasets: datasets.map(d => ({
+                    label: d.label,
+                    dataLength: d.data.length,
+                    hasData: d.data.some(v => v > 0),
+                    firstValues: d.data.slice(0, 3),
+                    borderColor: d.borderColor,
+                    borderDash: d.borderDash
+                })),
+                labelCount: dates.length,
+                firstLabels: dates.slice(0, 3)
+            });
 
             const chart = type === 'sales' ? salesChart : settleChart;
             if (chart) {
