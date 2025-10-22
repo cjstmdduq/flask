@@ -627,7 +627,7 @@
         let settleChart;
         let modalChart;
         let timeslotHeatmapChart;
-        let timeslotAreaChart;
+        let timeslotChannelChart;
         let currentTab = 'sales';
         let currentSection = 'sales-analysis';
         let activeModalType = null;
@@ -640,8 +640,86 @@
         let salesData = { total_stats: {}, daily_summary: [] };
         let settleData = { total_stats: {}, daily_summary: [] };
         let adData = { total_stats: {}, daily_summary: [] };
-        let timeslotData = { total_stats: {}, heatmap_data: [], channel_hourly: [], weekday_order: [] };
+        let timeslotData = { total_stats: {}, heatmap_data: [], channel_hourly: [], channel_weekday_hourly: [], weekday_order: [] };
         let selectedHeatmapCell = null;
+        const heatmapValuePlugin = {
+            id: 'heatmapValuePlugin',
+            afterDatasetsDraw(chart) {
+                if (chart.config.type !== 'matrix') return;
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach((dataset, datasetIndex) => {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    if (!meta || !meta.data) return;
+                    const maxValue = dataset.maxValue || 0;
+                    meta.data.forEach((element, index) => {
+                        const point = dataset.data[index];
+                        if (!point || typeof point.v !== 'number') return;
+                        const { width, height } = element;
+                        if (!width || !height) return;
+                        const center = typeof element.getCenterPoint === 'function'
+                            ? element.getCenterPoint()
+                            : { x: element.x + width / 2, y: element.y + height / 2 };
+                        const { x, y } = center;
+                        const value = point.v;
+                        const fontSize = Math.max(Math.min(width, height) * 0.42, 10);
+                        const intensity = maxValue ? value / maxValue : 0;
+                        ctx.save();
+                        ctx.font = `${fontSize}px 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+                        ctx.fillStyle = intensity > 0.55 ? 'rgba(255,255,255,0.92)' : '#1f2937';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(value.toLocaleString(), x, y);
+                        ctx.restore();
+                    });
+                });
+            }
+        };
+        const heatmapColumnTotalsPlugin = {
+            id: 'heatmapColumnTotalsPlugin',
+            afterDatasetsDraw(chart) {
+                if (chart.config.type !== 'matrix') return;
+                const dataset = chart.data.datasets.find(ds =>
+                    Array.isArray(ds.columnTotals) &&
+                    Array.isArray(ds.weekdayLabels)
+                );
+                if (!dataset) return;
+                const xScale = chart.scales.x;
+                if (!xScale) return;
+                const ctx = chart.ctx;
+                const { top } = chart.chartArea;
+                const columnWidth = chart.chartArea.width / Math.max(dataset.weekdayLabels.length || 1, 1);
+                const fontSize = Math.max(Math.min(columnWidth * 0.28, 12), 9);
+                ctx.save();
+                ctx.fillStyle = '#4b5563';
+                ctx.font = `${fontSize}px 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                dataset.weekdayLabels.forEach((label, idx) => {
+                    const x = xScale.getPixelForValue(label);
+                    const total = dataset.columnTotals[idx] || 0;
+                    const suffix = dataset.metricSuffix || '';
+                    ctx.fillText(`${total.toLocaleString()}${suffix}`, x, top - 4);
+                });
+                ctx.restore();
+            }
+        };
+        const doughnutCenterTextPlugin = {
+            id: 'doughnutCenterText',
+            afterDraw(chart, args, pluginOptions) {
+                const text = pluginOptions?.text;
+                if (!text) return;
+                const { ctx, chartArea: { width, height } } = chart;
+                ctx.save();
+                const fontSize = Math.min(width, height) / 12;
+                ctx.font = `${fontSize}px 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+                ctx.fillStyle = pluginOptions.color || '#1f2937';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, width / 2, height / 2);
+                ctx.restore();
+            }
+        };
+        Chart.register(heatmapValuePlugin, heatmapColumnTotalsPlugin, doughnutCenterTextPlugin);
 
         // 초기화
         document.addEventListener('DOMContentLoaded', function() {
@@ -718,27 +796,47 @@
             return `
                 <!-- 날짜 필터 -->
                 <div class="date-filter-section">
-                    <div style="margin-bottom: 0.75rem;">
-                        <div class="date-filter-title" style="margin-bottom: 0.5rem;">기간 선택</div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                            <button class="date-preset-btn" data-type="timeslot" data-days="7">최근 7일</button>
-                            <button class="date-preset-btn" data-type="timeslot" data-days="14">최근 14일</button>
-                            <button class="date-preset-btn active" data-type="timeslot" data-days="30">최근 30일</button>
-                            <button class="date-preset-btn" data-type="timeslot" data-preset="this-month">이번달</button>
-                            <button class="date-preset-btn" data-type="timeslot" data-preset="last-month">저번달</button>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.75rem;">
+                        <div>
+                            <div class="date-filter-title" style="margin-bottom: 0.5rem;">기간 선택</div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <button class="date-preset-btn" data-type="timeslot" data-days="7">최근 7일</button>
+                                <button class="date-preset-btn" data-type="timeslot" data-days="14">최근 14일</button>
+                                <button class="date-preset-btn active" data-type="timeslot" data-days="30">최근 30일</button>
 
-                            <span style="color: #d1d5db; margin: 0 0.25rem;">|</span>
+                                <span style="color: #d1d5db; margin: 0 0.25rem;">|</span>
 
-                            <input type="date" class="form-control timeslot-date-input" id="timeslot-startDate" style="width: 150px;">
-                            <span style="color: #6b7280;">~</span>
-                            <input type="date" class="form-control timeslot-date-input" id="timeslot-endDate" style="width: 150px;">
+                                <input type="date" class="form-control timeslot-date-input" id="timeslot-startDate" style="width: 150px;">
+                                <span style="color: #6b7280;">~</span>
+                                <input type="date" class="form-control timeslot-date-input" id="timeslot-endDate" style="width: 150px;">
 
-                            <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('timeslot', -1)" title="이전">
-                                <i data-lucide="chevron-left"></i>
-                            </button>
-                            <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('timeslot', 1)" title="다음">
-                                <i data-lucide="chevron-right"></i>
-                            </button>
+                                <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('timeslot', -1)" title="이전">
+                                    <i data-lucide="chevron-left"></i>
+                                </button>
+                                <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('timeslot', 1)" title="다음">
+                                    <i data-lucide="chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.8125rem; font-weight: 500; color: #4b5563; margin-bottom: 0.35rem;">최근 기준</div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <button class="date-preset-btn" data-type="timeslot" data-days="90">최근 90일</button>
+                                <button class="date-preset-btn" data-type="timeslot" data-days="180">최근 180일</button>
+                                <button class="date-preset-btn" data-type="timeslot" data-days="365">최근 365일</button>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.8125rem; font-weight: 500; color: #4b5563; margin-bottom: 0.35rem;">기간별</div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <button class="date-preset-btn" data-type="timeslot" data-preset="this-week">이번주</button>
+                                <button class="date-preset-btn" data-type="timeslot" data-preset="last-week">저번주</button>
+                                <button class="date-preset-btn" data-type="timeslot" data-preset="this-month">이번달</button>
+                                <button class="date-preset-btn" data-type="timeslot" data-preset="last-month">저번달</button>
+                                <button class="date-preset-btn" data-type="timeslot" data-preset="this-quarter">이번분기</button>
+                                <button class="date-preset-btn" data-type="timeslot" data-preset="current-half">반기</button>
+                                <button class="date-preset-btn" data-type="timeslot" data-preset="current-year">년</button>
+                            </div>
                         </div>
                     </div>
 
@@ -757,12 +855,13 @@
 
                 <div class="row">
                     <!-- 히트맵 차트 -->
-                    <div class="col-md-7">
-                        <div class="chart-container">
-                            <div class="chart-header">
-                                <div class="chart-title">요일/시간대별 유입 히트맵 (골든 타임 파악)</div>
-                            </div>
-                            <div style="position: relative; height: 400px;">
+                        <div class="col-md-7">
+                            <div class="chart-container">
+                                <div class="chart-header" style="flex-direction: column; align-items: flex-start; gap: 0.35rem;">
+                                    <div class="chart-title">요일/시간대별 유입 히트맵 (골든 타임 파악)</div>
+                                    <div class="chart-subtitle" id="timeslot-date-range" style="font-size: 0.8rem; color: #6b7280;"></div>
+                                </div>
+                            <div style="position: relative; height: 520px;">
                                 <canvas id="timeslot-heatmap"></canvas>
                             </div>
                             <div style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">
@@ -771,16 +870,16 @@
                         </div>
                     </div>
 
-                    <!-- 채널별 누적 영역형 차트 -->
-                    <div class="col-md-5">
-                        <div class="chart-container">
-                            <div class="chart-header">
-                                <div class="chart-title">시간대별 채널 유입 분포</div>
-                                <button class="chart-expand-btn" onclick="clearHeatmapSelection()" title="전체보기" style="display: none;" id="clear-filter-btn">
-                                    <i data-lucide="x" style="width: 16px; height: 16px;"></i>
-                                </button>
-                            </div>
-                            <div id="filter-info" style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem; display: none;">
+                        <!-- 채널별 구성 차트 -->
+                        <div class="col-md-5">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <div class="chart-title">채널별 유입 구성</div>
+                                    <button class="chart-expand-btn" onclick="clearHeatmapSelection()" title="전체보기" style="display: none;" id="clear-filter-btn">
+                                        <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                                    </button>
+                                </div>
+                                <div id="filter-info" style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem; display: none;">
                                 선택: <span id="filter-info-text"></span>
                             </div>
                             <div style="position: relative; height: 360px;">
@@ -804,10 +903,8 @@
 
                     if (days) {
                         setDateRange('timeslot', parseInt(days));
-                    } else if (preset === 'this-month') {
-                        setThisMonth('timeslot');
-                    } else if (preset === 'last-month') {
-                        setLastMonth('timeslot');
+                    } else if (preset) {
+                        applyDatePreset('timeslot', preset);
                     }
 
                     loadTimeslotData();
@@ -832,6 +929,7 @@
         async function loadTimeslotData() {
             const startDate = document.getElementById('timeslot-startDate').value;
             const endDate = document.getElementById('timeslot-endDate').value;
+            setTimeslotDateRangeLabel(startDate, endDate);
 
             try {
                 const response = await fetch(`/api/timeslot_data?start_date=${startDate}&end_date=${endDate}`);
@@ -857,27 +955,61 @@
         function updateHeatmapChart(metric) {
             const metricKey = metric === 'customer' ? '고객수' : '유입수';
             const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
+            const timeSlotLabels = Array.from({ length: 24 }, (_, hour) => {
+                const nextHour = hour + 1;
+                return `${hour.toString().padStart(2, '0')}-${nextHour.toString().padStart(2, '0')}`;
+            });
+            const timeSlotAxisLabels = [...timeSlotLabels].reverse();
 
             // 히트맵 데이터 변환 - X축: 요일, Y축: 시간대
             const heatmapPoints = [];
+            const totalsByWeekday = new Map();
             timeslotData.heatmap_data.forEach(item => {
+                const hour = item['시간'];
+                const hourLabel = timeSlotLabels[hour] || `${hour.toString().padStart(2, '0')}-${(hour + 1).toString().padStart(2, '0')}`;
                 heatmapPoints.push({
-                    x: weekdayOrder.indexOf(item['요일']),  // X축: 요일 인덱스
-                    y: item['시간'],                        // Y축: 시간
-                    v: item[metricKey] || 0,
+                    x: item['요일'],                        // X축: 요일 라벨
+                    y: hourLabel,                           // Y축: 시간대 라벨
+                    v: item[metricKey] || 0,               // 값
                     weekday: item['요일'],
-                    hour: item['시간']
+                    hour,
+                    hourLabel
                 });
+                const weekday = item['요일'];
+                const value = item[metricKey] || 0;
+                totalsByWeekday.set(weekday, (totalsByWeekday.get(weekday) || 0) + value);
             });
+            const columnTotals = weekdayOrder.map(day => totalsByWeekday.get(day) || 0);
+            const metricSuffix = metric === 'customer' ? '명' : '건';
 
             // 최대값 계산 (색상 스케일용)
-            const maxValue = Math.max(...heatmapPoints.map(p => p.v));
+            const maxValue = heatmapPoints.length ? Math.max(...heatmapPoints.map(p => p.v)) : 0;
+            const getHeatmapColor = (value, peak) => {
+                if (!peak || value <= 0) {
+                    return 'rgba(226, 232, 240, 0.6)';
+                }
+                const normalized = Math.pow(value / peak, 0.6);
+                const ramp = (start, mid, end) => {
+                    if (normalized < 0.5) {
+                        const t = normalized * 2;
+                        return start + (mid - start) * t;
+                    }
+                    const t = (normalized - 0.5) * 2;
+                    return mid + (end - mid) * t;
+                };
+                const r = Math.round(ramp(219, 96, 30));
+                const g = Math.round(ramp(234, 165, 64));
+                const b = Math.round(ramp(254, 250, 175));
+                return `rgba(${r}, ${g}, ${b}, 0.92)`;
+            };
 
             if (timeslotHeatmapChart) {
                 timeslotHeatmapChart.destroy();
             }
 
             const ctx = document.getElementById('timeslot-heatmap').getContext('2d');
+            const weekdayCount = weekdayOrder.length || 1;
+            const timeSlotCount = timeSlotLabels.length || 1;
             timeslotHeatmapChart = new Chart(ctx, {
                 type: 'matrix',
                 data: {
@@ -886,18 +1018,55 @@
                         data: heatmapPoints,
                         backgroundColor(context) {
                             const value = context.dataset.data[context.dataIndex].v;
-                            const alpha = maxValue > 0 ? value / maxValue : 0;
-                            return `rgba(59, 130, 246, ${alpha * 0.8 + 0.2})`;
+                            return getHeatmapColor(value, maxValue);
                         },
                         borderWidth: 1,
                         borderColor: '#e5e7eb',
-                        width: ({chart}) => (chart.chartArea || {}).width / 7 - 1,   // 7개 요일
-                        height: ({chart}) => (chart.chartArea || {}).height / 24 - 1  // 24시간
+                        width: ({ chart }) => (chart.chartArea ? chart.chartArea.width / weekdayCount - 1 : 0),
+                        height: ({ chart }) => (chart.chartArea ? chart.chartArea.height / timeSlotCount - 1 : 0),
+                        maxValue,
+                        columnTotals,
+                        weekdayLabels: weekdayOrder,
+                        metricSuffix,
+                        animations: {
+                            numbers: {
+                                duration: 0
+                            },
+                            colors: {
+                                duration: 0
+                            }
+                        }
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            top: 36,
+                            right: 16,
+                            bottom: 16,
+                            left: 16
+                        }
+                    },
+                    animation: false,
+                    transitions: {
+                        active: {
+                            animation: {
+                                duration: 0
+                            }
+                        },
+                        show: {
+                            animation: {
+                                duration: 0
+                            }
+                        },
+                        hide: {
+                            animation: {
+                                duration: 0
+                            }
+                        }
+                    },
                     plugins: {
                         legend: {
                             display: false
@@ -909,7 +1078,7 @@
                                 },
                                 label(context) {
                                     const v = context.dataset.data[context.dataIndex];
-                                    return `${v.weekday} ${v.hour}시: ${v.v.toLocaleString()}${metric === 'customer' ? '명' : '건'}`;
+                                    return `${v.weekday} ${v.hourLabel}: ${v.v.toLocaleString()}${metric === 'customer' ? '명' : '건'}`;
                                 }
                             }
                         }
@@ -925,13 +1094,9 @@
                             }
                         },
                         y: {
-                            type: 'linear',
-                            min: -0.5,
-                            max: 23.5,
-                            ticks: {
-                                stepSize: 1,
-                                callback: (value) => value >= 0 && value <= 23 ? `${value}시` : ''
-                            },
+                            type: 'category',
+                            labels: timeSlotAxisLabels,
+                            offset: true,
                             grid: {
                                 display: false
                             }
@@ -949,7 +1114,7 @@
 
                             // 필터 정보 표시
                             document.getElementById('filter-info').style.display = 'block';
-                            document.getElementById('filter-info-text').textContent = `${clickedData.weekday} ${clickedData.hour}시`;
+                            document.getElementById('filter-info-text').textContent = `${clickedData.weekday} ${clickedData.hourLabel}`;
                             document.getElementById('clear-filter-btn').style.display = 'block';
                             lucide.createIcons();
                         }
@@ -962,27 +1127,22 @@
             const metricKey = metric === 'customer' ? '고객수' : '유입수';
 
             // 데이터 필터링 및 집계
-            let channelData = timeslotData.channel_hourly;
+            const overallChannelData = timeslotData.channel_hourly || [];
+            const weekdayChannelData = timeslotData.channel_weekday_hourly || [];
+            let channelData = overallChannelData;
 
             // 히트맵 셀 선택 시 필터링
             if (selectedHeatmapCell) {
-                // 원본 데이터에서 선택된 요일/시간 필터링
-                const rawData = timeslotData.heatmap_data;
-                const filtered = rawData.filter(item =>
+                channelData = weekdayChannelData.filter(item =>
                     item['요일'] === selectedHeatmapCell.weekday &&
                     item['시간'] === selectedHeatmapCell.hour
                 );
 
-                // 선택된 시간대의 채널별 데이터 재구성
-                channelData = [];
-                // 실제 구현 시 원본 데이터에서 채널별로 집계 필요
-                // 현재는 channel_hourly 데이터에서 해당 시간만 필터링
-                channelData = timeslotData.channel_hourly.filter(item => item['시간'] === selectedHeatmapCell.hour);
+                // 요일/시간 데이터가 없을 경우 시간 기준 집계로 대체
+                if (channelData.length === 0) {
+                    channelData = overallChannelData.filter(item => item['시간'] === selectedHeatmapCell.hour);
+                }
             }
-
-            // 시간대별, 채널별로 그룹화
-            const hours = [...new Set(channelData.map(item => item['시간']))].sort((a, b) => a - b);
-            const channels = [...new Set(channelData.map(item => item['채널그룹']))];
 
             // 채널별 색상 매핑
             const channelColors = {
@@ -995,70 +1155,79 @@
                 '사용자정의': '#ec4899'
             };
 
-            // 데이터셋 생성
-            const datasets = channels.map(channel => {
-                const data = hours.map(hour => {
-                    const item = channelData.find(d => d['시간'] === hour && d['채널그룹'] === channel);
-                    return item ? item[metricKey] : 0;
-                });
-
-                return {
-                    label: channel,
-                    data: data,
-                    backgroundColor: channelColors[channel] || '#94a3b8',
-                    borderColor: channelColors[channel] || '#94a3b8',
-                    borderWidth: 1,
-                    fill: true
-                };
+            // 채널별 총합 집계
+            const channelTotalsMap = new Map();
+            channelData.forEach(item => {
+                const channel = item['채널그룹'] || '기타';
+                const value = Number(item[metricKey]) || 0;
+                channelTotalsMap.set(channel, (channelTotalsMap.get(channel) || 0) + value);
             });
 
-            if (timeslotAreaChart) {
-                timeslotAreaChart.destroy();
+            const channels = Array.from(channelTotalsMap.keys());
+            const totals = channels.map(channel => channelTotalsMap.get(channel));
+            const totalValue = totals.reduce((sum, val) => sum + val, 0);
+
+            // 차트 데이터가 없으면 초기화 후 종료
+            if (channels.length === 0 || totalValue === 0) {
+                if (timeslotChannelChart) {
+                    timeslotChannelChart.destroy();
+                    timeslotChannelChart = null;
+                }
+                return;
+            }
+
+            if (timeslotChannelChart) {
+                timeslotChannelChart.destroy();
             }
 
             const ctx = document.getElementById('timeslot-area').getContext('2d');
-            timeslotAreaChart = new Chart(ctx, {
-                type: 'line',
+            timeslotChannelChart = new Chart(ctx, {
+                type: 'doughnut',
                 data: {
-                    labels: hours.map(h => `${h}시`),
-                    datasets: datasets
+                    labels: channels,
+                    datasets: [{
+                        label: metricKey,
+                        data: totals,
+                        backgroundColor: channels.map(channel => channelColors[channel] || '#94a3b8'),
+                        borderColor: '#ffffff',
+                        borderWidth: 1
+                    }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    cutout: '55%',
+                    animation: false,
                     plugins: {
                         legend: {
                             display: true,
-                            position: 'top'
+                            position: 'right',
+                            labels: {
+                                boxWidth: 16,
+                                boxHeight: 16,
+                                padding: 16
+                            }
                         },
                         tooltip: {
-                            mode: 'index',
-                            intersect: false
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: true,
-                            grid: {
-                                display: false
-                            }
-                        },
-                        y: {
-                            stacked: true,
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return value.toLocaleString();
+                            callbacks: {
+                                label(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    return `${label}: ${value.toLocaleString()}${metric === 'customer' ? '명' : '건'}`;
                                 }
                             }
+                        },
+                        doughnutCenterText: {
+                            text: `${totalValue.toLocaleString()}${metric === 'customer' ? '명' : '건'}`,
+                            color: '#1f2937'
                         }
                     },
-                    elements: {
-                        line: {
-                            tension: 0.4
-                        },
-                        point: {
-                            radius: 0
+                    layout: {
+                        padding: {
+                            top: 12,
+                            bottom: 12,
+                            left: 12,
+                            right: 12
                         }
                     }
                 }
@@ -1297,10 +1466,8 @@
 
                     if (days) {
                         setDateRange(prefix, parseInt(days));
-                    } else if (preset === 'this-month') {
-                        setThisMonth(prefix);
-                    } else if (preset === 'last-month') {
-                        setLastMonth(prefix);
+                    } else if (preset) {
+                        applyDatePreset(prefix, preset);
                     }
 
                     if (type === 'sales') {
@@ -1351,33 +1518,148 @@
             setDateRange(prefix, 14);
         }
 
+        function applyDateRange(prefix, startDate, endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                return;
+            }
+
+            if (end < start) {
+                end.setTime(start.getTime());
+            }
+
+            document.getElementById(`${prefix}-startDate`).value = formatDate(start);
+            document.getElementById(`${prefix}-endDate`).value = formatDate(end);
+        }
+
         function setDateRange(prefix, days) {
             const end = new Date();
             end.setDate(end.getDate() - 1);
             const start = new Date(end);
-            start.setDate(end.getDate() - (days - 1));
-
-            document.getElementById(`${prefix}-startDate`).value = formatDate(start);
-            document.getElementById(`${prefix}-endDate`).value = formatDate(end);
+            start.setDate(start.getDate() - (days - 1));
+            applyDateRange(prefix, start, end);
         }
 
         function setThisMonth(prefix) {
             const now = new Date();
             const start = new Date(now.getFullYear(), now.getMonth(), 1);
             const end = new Date();
-            end.setDate(end.getDate() - 1);
-
-            document.getElementById(`${prefix}-startDate`).value = formatDate(start);
-            document.getElementById(`${prefix}-endDate`).value = formatDate(end);
+            applyDateRange(prefix, start, end);
         }
 
         function setLastMonth(prefix) {
             const now = new Date();
             const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             const end = new Date(now.getFullYear(), now.getMonth(), 0);
+            applyDateRange(prefix, start, end);
+        }
 
-            document.getElementById(`${prefix}-startDate`).value = formatDate(start);
-            document.getElementById(`${prefix}-endDate`).value = formatDate(end);
+        function formatDisplayDate(dateStr) {
+            if (!dateStr) return null;
+            const date = new Date(dateStr);
+            if (Number.isNaN(date.getTime())) return null;
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}.${month}.${day}`;
+        }
+
+        function setTimeslotDateRangeLabel(startDate, endDate) {
+            const el = document.getElementById('timeslot-date-range');
+            if (!el) return;
+            const startLabel = formatDisplayDate(startDate);
+            const endLabel = formatDisplayDate(endDate);
+            if (startLabel && endLabel) {
+                el.textContent = `${startLabel} ~ ${endLabel}`;
+            } else if (endLabel) {
+                el.textContent = endLabel;
+            } else if (startLabel) {
+                el.textContent = startLabel;
+            } else {
+                el.textContent = '';
+            }
+        }
+
+        function getWeekStart(date) {
+            const result = new Date(date);
+            const day = result.getDay();
+            result.setDate(result.getDate() - day);
+            return result;
+        }
+
+        function setThisWeek(prefix) {
+            const today = new Date();
+            const start = getWeekStart(today);
+            const endOfWeek = new Date(start);
+            endOfWeek.setDate(start.getDate() + 6);
+            const end = new Date(Math.min(today.getTime(), endOfWeek.getTime()));
+            applyDateRange(prefix, start, end);
+        }
+
+        function setLastWeek(prefix) {
+            const today = new Date();
+            const startOfThisWeek = getWeekStart(today);
+            const end = new Date(startOfThisWeek);
+            end.setDate(end.getDate() - 1);
+            const start = new Date(end);
+            start.setDate(end.getDate() - 6);
+            applyDateRange(prefix, start, end);
+        }
+
+        function setThisQuarter(prefix) {
+            const today = new Date();
+            const quarter = Math.floor(today.getMonth() / 3);
+            const start = new Date(today.getFullYear(), quarter * 3, 1);
+            const endOfQuarter = new Date(today.getFullYear(), quarter * 3 + 3, 0);
+            const end = new Date(Math.min(today.getTime(), endOfQuarter.getTime()));
+            applyDateRange(prefix, start, end);
+        }
+
+        function setCurrentHalf(prefix) {
+            const today = new Date();
+            const startMonth = today.getMonth() < 6 ? 0 : 6;
+            const start = new Date(today.getFullYear(), startMonth, 1);
+            const endOfHalf = new Date(today.getFullYear(), startMonth + 6, 0);
+            const end = new Date(Math.min(today.getTime(), endOfHalf.getTime()));
+            applyDateRange(prefix, start, end);
+        }
+
+        function setCurrentYear(prefix) {
+            const today = new Date();
+            const start = new Date(today.getFullYear(), 0, 1);
+            const endOfYear = new Date(today.getFullYear(), 12, 0);
+            const end = new Date(Math.min(today.getTime(), endOfYear.getTime()));
+            applyDateRange(prefix, start, end);
+        }
+
+        function applyDatePreset(prefix, preset) {
+            switch (preset) {
+                case 'this-week':
+                    setThisWeek(prefix);
+                    break;
+                case 'last-week':
+                    setLastWeek(prefix);
+                    break;
+                case 'this-month':
+                    setThisMonth(prefix);
+                    break;
+                case 'last-month':
+                    setLastMonth(prefix);
+                    break;
+                case 'this-quarter':
+                    setThisQuarter(prefix);
+                    break;
+                case 'current-half':
+                    setCurrentHalf(prefix);
+                    break;
+                case 'current-year':
+                    setCurrentYear(prefix);
+                    break;
+                default:
+                    break;
+            }
         }
 
         function formatDate(date) {
@@ -1460,8 +1742,10 @@
             // 데이터 자동 로드
             if (prefix === 'sales') {
                 loadSalesData();
-            } else {
+            } else if (prefix === 'settle') {
                 loadSettleData();
+            } else if (prefix === 'timeslot') {
+                loadTimeslotData();
             }
 
             // 아이콘 재초기화

@@ -553,9 +553,17 @@ def get_timeslot_data():
         df = df.dropna(subset=['날짜'])
 
         if start_date:
-            df = df[df['날짜'] >= start_date]
+            try:
+                start = pd.to_datetime(start_date)
+                df = df[df['날짜'] >= start]
+            except (ValueError, TypeError):
+                pass
         if end_date:
-            df = df[df['날짜'] <= end_date]
+            try:
+                end = pd.to_datetime(end_date)
+                df = df[df['날짜'] <= end]
+            except (ValueError, TypeError):
+                pass
 
         # 시간대 숫자 추출 (예: "00시" -> 0)
         df['시간'] = df['시간대'].str.extract(r'(\d+)').astype(int)
@@ -563,6 +571,7 @@ def get_timeslot_data():
         # 요일 순서 정의 (일-토)
         weekday_order = ['일', '월', '화', '수', '목', '금', '토']
         df['요일_순서'] = df['요일'].apply(lambda x: weekday_order.index(x) if x in weekday_order else -1)
+        df = df[df['요일_순서'] >= 0]
 
         # 히트맵용 데이터: 요일별/시간대별 집계
         heatmap_data = df.groupby(['요일', '요일_순서', '시간']).agg({
@@ -575,6 +584,12 @@ def get_timeslot_data():
             '고객수': 'sum',
             '유입수': 'sum'
         }).reset_index()
+
+        # 요일/시간대/채널별 데이터 (세부 필터용)
+        channel_weekday_hourly = df.groupby(['요일', '요일_순서', '시간', '채널그룹']).agg({
+            '고객수': 'sum',
+            '유입수': 'sum'
+        }).reset_index().sort_values(['요일_순서', '시간'])
 
         # 전체 통계
         total_stats = {
@@ -590,6 +605,7 @@ def get_timeslot_data():
                 'total_stats': total_stats,
                 'heatmap_data': heatmap_data.to_dict('records'),
                 'channel_hourly': channel_hourly.to_dict('records'),
+                'channel_weekday_hourly': channel_weekday_hourly.to_dict('records'),
                 'weekday_order': weekday_order
             }
         })
