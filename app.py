@@ -663,11 +663,20 @@ def get_timeslot_data():
             'date_range_days': int((df['날짜'].max() - df['날짜'].min()).days + 1)
         }
 
+        # sales_data는 heatmap_data와 동일 (호환성을 위해 추가)
+        sales_data = heatmap_data[['요일', '시간', '결제자수', '결제금액']].copy()
+        sales_data['시간대'] = sales_data['시간'].astype(str) + '시'
+        
+        # weekday_hourly도 heatmap_data와 동일 (결제 데이터 포함)
+        weekday_hourly = heatmap_data.copy()
+
         return jsonify({
             'success': True,
             'data': {
                 'total_stats': total_stats,
                 'heatmap_data': heatmap_data.to_dict('records'),
+                'weekday_hourly': weekday_hourly.to_dict('records'),
+                'sales_data': sales_data.to_dict('records'),
                 'channel_hourly': channel_hourly.to_dict('records'),
                 'channel_weekday_hourly': channel_weekday_hourly.to_dict('records'),
                 'weekday_order': weekday_order

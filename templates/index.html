@@ -708,14 +708,17 @@
             afterDraw(chart, args, pluginOptions) {
                 const text = pluginOptions?.text;
                 if (!text) return;
-                const { ctx, chartArea: { width, height } } = chart;
+                const { ctx, chartArea: { left, right, top, bottom, width, height } } = chart;
                 ctx.save();
                 const fontSize = Math.min(width, height) / 12;
                 ctx.font = `${fontSize}px 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
                 ctx.fillStyle = pluginOptions.color || '#1f2937';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(text, width / 2, height / 2);
+                // chartArea의 실제 중앙 좌표 계산
+                const centerX = left + width / 2;
+                const centerY = top + height / 2;
+                ctx.fillText(text, centerX, centerY);
                 ctx.restore();
             }
         };
@@ -855,6 +858,9 @@
                             <label class="checkbox-label">
                                 <input type="radio" name="timeslot-metric" value="amount"> 결제금액
                             </label>
+                            <label class="checkbox-label">
+                                <input type="radio" name="timeslot-metric" value="integrated"> 통합보기
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -865,7 +871,7 @@
                             <div class="chart-container">
                                 <div class="chart-header">
                                     <div style="flex-direction: column; align-items: flex-start; gap: 0.35rem; flex: 1;">
-                                        <div class="chart-title">요일/시간대별 유입 히트맵 (골든 타임 파악)</div>
+                                        <div class="chart-title" id="heatmap-title">요일/시간대별 고객수 히트맵</div>
                                         <div class="chart-subtitle" id="timeslot-date-range" style="font-size: 0.8rem; color: #6b7280;"></div>
                                     </div>
                                     <button class="chart-expand-btn" onclick="downloadHeatmapCSV()" title="CSV 다운로드">
@@ -885,7 +891,7 @@
                         <div class="col-md-5">
                             <div class="chart-container">
                                 <div class="chart-header">
-                                    <div class="chart-title">채널별 유입 구성</div>
+                                    <div class="chart-title" id="channel-chart-title">채널별 유입 구성</div>
                                     <button class="chart-expand-btn" onclick="clearHeatmapSelection()" title="전체보기" style="display: none;" id="clear-filter-btn">
                                         <i data-lucide="x" style="width: 16px; height: 16px;"></i>
                                     </button>
@@ -893,11 +899,25 @@
                                 <div id="filter-info" style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.75rem; display: none;">
                                     선택: <span id="filter-info-text"></span>
                                 </div>
-                                <!-- 결제 지표 선택 시 표시할 메시지 -->
-                                <div id="payment-metric-message" style="display: none; text-align: center; padding: 4rem 2rem; color: #6b7280;">
-                                    
-                                    <div style="font-size: 1.125rem; font-weight: 500; margin-bottom: 0.5rem;">결제 관련 상세 데이터</div>
-                                    <div style="font-size: 0.875rem;">채널별 상세 데이터는 제공되지 않습니다</div>
+                                <!-- 결제 지표 선택 시 표시할 분석 데이터 -->
+                                <div id="payment-metric-message" style="display: none; padding: 1.5rem;">
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                        <!-- 전환율 카드 -->
+                                        <div style="background: #f9fafb; border-radius: 8px; padding: 1.5rem; border: 1px solid #e5e7eb;">
+                                            <div style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;">전환율</div>
+                                            <div style="font-size: 1.875rem; font-weight: 700; color: #1f2937;" id="conversion-rate">-</div>
+                                            <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">결제자수 / 고객수</div>
+                                        </div>
+                                        <!-- 객단가 카드 -->
+                                        <div style="background: #f9fafb; border-radius: 8px; padding: 1.5rem; border: 1px solid #e5e7eb;">
+                                            <div style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;">객단가</div>
+                                            <div style="font-size: 1.875rem; font-weight: 700; color: #1f2937;" id="average-order-value">-</div>
+                                            <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">결제금액 / 결제자수</div>
+                                        </div>
+                                    </div>
+                                    <div id="payment-filter-info" style="text-align: center; font-size: 0.875rem; color: #6b7280; margin-top: 1rem;">
+                                        전체 기간
+                                    </div>
                                 </div>
                                 <div id="channel-chart-content">
                                     <div style="position: relative; height: 300px; margin-bottom: 1.5rem;">
@@ -972,11 +992,62 @@
 
         function updateTimeslotCharts() {
             const metric = document.querySelector('input[name="timeslot-metric"]:checked').value;
+            const channelChartContainer = document.querySelector('#timeslot-content > div.row > div.col-md-5');
+            // col-md-7 또는 col-md-12 모두 찾을 수 있도록 수정
+            const heatmapContainer = document.querySelector('#timeslot-content > div.row > div.col-md-7') 
+                                   || document.querySelector('#timeslot-content > div.row > div.col-md-12');
+            
+            // 통합보기 선택 시 우측 차트 숨기고 히트맵 확장
+            if (metric === 'integrated') {
+                document.getElementById('heatmap-title').textContent = '요일/시간대별 통합 히트맵 (4지표)';
+                
+                // 우측 차트 숨기기
+                if (channelChartContainer) channelChartContainer.style.display = 'none';
+                
+                // 히트맵 전체 너비로 확장
+                if (heatmapContainer) {
+                    heatmapContainer.classList.remove('col-md-7');
+                    heatmapContainer.classList.add('col-md-12');
+                }
+            } else {
+                // 히트맵 제목 업데이트
+                const metricTitles = {
+                    'customer': '고객수',
+                    'inflow': '유입수',
+                    'payers': '결제자수',
+                    'amount': '결제금액'
+                };
+                const metricTitle = metricTitles[metric] || '고객수';
+                document.getElementById('heatmap-title').textContent = `요일/시간대별 ${metricTitle} 히트맵`;
+                
+                // 채널 차트 제목 업데이트
+                if (metric === 'payers' || metric === 'amount') {
+                    document.getElementById('channel-chart-title').textContent = '구매 데이터 분석';
+                } else {
+                    document.getElementById('channel-chart-title').textContent = '채널별 유입 구성';
+                }
+                
+                // 우측 차트 보이기
+                if (channelChartContainer) channelChartContainer.style.display = '';
+                
+                // 히트맵 원래 너비로 복원
+                if (heatmapContainer) {
+                    heatmapContainer.classList.remove('col-md-12');
+                    heatmapContainer.classList.add('col-md-7');
+                }
+            }
+            
             updateHeatmapChart(metric);
             updateAreaChart(metric);
         }
 
         function updateHeatmapChart(metric) {
+            // 통합보기 처리
+            if (metric === 'integrated') {
+                renderIntegratedHeatmap();
+                return;
+            }
+            
             const metricMap = {
                 'customer': '고객수',
                 'inflow': '유입수',
@@ -1165,12 +1236,16 @@
         }
 
         function updateAreaChart(metric) {
-            // 결제 관련 지표 선택 시 메시지 표시, 차트 내용 숨기기
+            // 결제 관련 지표 선택 시 분석 데이터 표시, 차트 내용 숨기기
             const paymentMessage = document.getElementById('payment-metric-message');
             const channelChartContent = document.getElementById('channel-chart-content');
             
             if (metric === 'payers' || metric === 'amount') {
-                if (paymentMessage) paymentMessage.style.display = 'block';
+                if (paymentMessage) {
+                    paymentMessage.style.display = 'block';
+                    // 전환율과 객단가 계산
+                    calculatePaymentMetrics();
+                }
                 if (channelChartContent) channelChartContent.style.display = 'none';
                 return;
             } else {
@@ -1374,40 +1449,84 @@
             }
 
             const metric = document.querySelector('input[name="timeslot-metric"]:checked').value;
-            const metricMap = {
-                'customer': '고객수',
-                'inflow': '유입수',
-                'payers': '결제자수',
-                'amount': '결제금액'
-            };
-            const metricKey = metricMap[metric] || '고객수';
-            const metricLabel = metricKey;
             const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
-
-            // 히트맵 데이터를 2차원 배열로 변환
             const heatmapData = timeslotData.heatmap_data;
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            let csvContent, filename;
 
-            // 시간대별로 그룹화
-            const dataByHour = {};
-            heatmapData.forEach(item => {
-                const hour = item['시간'];
-                if (!dataByHour[hour]) {
-                    dataByHour[hour] = {};
-                }
-                dataByHour[hour][item['요일']] = item[metricKey] || 0;
-            });
-
-            // CSV 형식으로 변환
-            let csvContent = '시간대,' + weekdayOrder.join(',') + '\n';
-
-            // 0시부터 23시까지
-            for (let hour = 0; hour < 24; hour++) {
-                const row = [`${hour}시`];
-                weekdayOrder.forEach(weekday => {
-                    const value = dataByHour[hour]?.[weekday] || 0;
-                    row.push(value);
+            // 통합보기일 때
+            if (metric === 'integrated') {
+                const metrics = ['고객수', '유입수', '결제자수', '결제금액'];
+                
+                // 헤더 생성: 시간대, 일_고객수, 일_유입수, 일_결제자수, 일_결제금액, 월_고객수, ...
+                const headers = ['시간대'];
+                weekdayOrder.forEach(day => {
+                    metrics.forEach(m => {
+                        headers.push(`${day}_${m}`);
+                    });
                 });
-                csvContent += row.join(',') + '\n';
+                csvContent = headers.join(',') + '\n';
+
+                // 시간대별로 데이터 그룹화
+                const dataByHour = {};
+                heatmapData.forEach(item => {
+                    const hour = item['시간'];
+                    if (!dataByHour[hour]) {
+                        dataByHour[hour] = {};
+                    }
+                    dataByHour[hour][item['요일']] = item;
+                });
+
+                // 각 시간대별 데이터 생성
+                for (let hour = 0; hour < 24; hour++) {
+                    const row = [`${hour}시`];
+                    weekdayOrder.forEach(weekday => {
+                        const item = dataByHour[hour]?.[weekday];
+                        metrics.forEach(metricKey => {
+                            const value = item ? (item[metricKey] || 0) : 0;
+                            row.push(value);
+                        });
+                    });
+                    csvContent += row.join(',') + '\n';
+                }
+                
+                filename = `히트맵_통합보기_${timestamp}.csv`;
+            } 
+            // 단일 지표일 때
+            else {
+                const metricMap = {
+                    'customer': '고객수',
+                    'inflow': '유입수',
+                    'payers': '결제자수',
+                    'amount': '결제금액'
+                };
+                const metricKey = metricMap[metric] || '고객수';
+                const metricLabel = metricKey;
+
+                // 시간대별로 그룹화
+                const dataByHour = {};
+                heatmapData.forEach(item => {
+                    const hour = item['시간'];
+                    if (!dataByHour[hour]) {
+                        dataByHour[hour] = {};
+                    }
+                    dataByHour[hour][item['요일']] = item[metricKey] || 0;
+                });
+
+                // CSV 형식으로 변환
+                csvContent = '시간대,' + weekdayOrder.join(',') + '\n';
+
+                // 0시부터 23시까지
+                for (let hour = 0; hour < 24; hour++) {
+                    const row = [`${hour}시`];
+                    weekdayOrder.forEach(weekday => {
+                        const value = dataByHour[hour]?.[weekday] || 0;
+                        row.push(value);
+                    });
+                    csvContent += row.join(',') + '\n';
+                }
+                
+                filename = `히트맵_${metricLabel}_${timestamp}.csv`;
             }
 
             // BOM 추가 (한글 깨짐 방지)
@@ -1417,8 +1536,6 @@
             // 다운로드
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
-            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-            const filename = `히트맵_${metricLabel}_${timestamp}.csv`;
 
             link.setAttribute('href', url);
             link.setAttribute('download', filename);
@@ -1437,6 +1554,253 @@
                 button.innerHTML = originalHTML;
                 lucide.createIcons();
             }, 1500);
+        }
+
+        function renderIntegratedHeatmap() {
+            const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
+            const timeSlotLabels = Array.from({ length: 24 }, (_, hour) => {
+                const nextHour = hour + 1;
+                return `${hour.toString().padStart(2, '0')}-${nextHour.toString().padStart(2, '0')}`;
+            });
+            const timeSlotAxisLabels = [...timeSlotLabels].reverse();
+            
+            // 4개 지표 정의
+            const metrics = [
+                { key: '고객수', label: '고', color: 'customer' },
+                { key: '유입수', label: '유', color: 'inflow' },
+                { key: '결제자수', label: '결', color: 'payer' },
+                { key: '결제금액', label: '금', color: 'amount' }
+            ];
+            
+            // X축 레이블 생성 (요일 x 4개 지표)
+            const integratedXLabels = [];
+            weekdayOrder.forEach(day => {
+                metrics.forEach(m => {
+                    integratedXLabels.push(`${day}\n${m.label}`);
+                });
+            });
+            
+            // 히트맵 데이터 변환
+            const heatmapPoints = [];
+            const dataByWeekdayHour = new Map();
+            
+            timeslotData.heatmap_data.forEach(item => {
+                const key = `${item['요일']}_${item['시간']}`;
+                dataByWeekdayHour.set(key, item);
+            });
+            
+            // 각 시간대별로 요일 x 지표 조합 생성
+            for (let hour = 0; hour < 24; hour++) {
+                const hourLabel = timeSlotLabels[hour];
+                
+                weekdayOrder.forEach(weekday => {
+                    const key = `${weekday}_${hour}`;
+                    const item = dataByWeekdayHour.get(key);
+                    
+                    metrics.forEach(metric => {
+                        const value = item ? (item[metric.key] || 0) : 0;
+                        heatmapPoints.push({
+                            x: `${weekday}\n${metric.label}`,
+                            y: hourLabel,
+                            v: value,
+                            weekday,
+                            hour,
+                            hourLabel,
+                            metricLabel: metric.key,
+                            metricColor: metric.color
+                        });
+                    });
+                });
+            }
+            
+            // 각 지표별 최대값 계산
+            const maxValues = {};
+            metrics.forEach(metric => {
+                const values = heatmapPoints
+                    .filter(p => p.metricLabel === metric.key)
+                    .map(p => p.v);
+                maxValues[metric.key] = Math.max(...values, 1);
+            });
+            
+            // 색상 함수
+            const getIntegratedColor = (point) => {
+                const value = point.v;
+                const maxValue = maxValues[point.metricLabel];
+                
+                if (!maxValue || value <= 0) {
+                    return 'rgba(226, 232, 240, 0.6)';
+                }
+                
+                const normalized = Math.pow(value / maxValue, 0.6);
+                const ramp = (start, mid, end) => {
+                    if (normalized < 0.5) {
+                        const t = normalized * 2;
+                        return start + (mid - start) * t;
+                    }
+                    const t = (normalized - 0.5) * 2;
+                    return mid + (end - mid) * t;
+                };
+                
+                // 지표별 색상
+                if (point.metricColor === 'payer' || point.metricColor === 'amount') {
+                    // 결제 관련: 녹색 계열
+                    const r = Math.round(ramp(220, 74, 21));
+                    const g = Math.round(ramp(252, 222, 128));
+                    const b = Math.round(ramp(231, 145, 61));
+                    return `rgba(${r}, ${g}, ${b}, 0.92)`;
+                } else {
+                    // 고객/유입: 파란색 계열
+                    const r = Math.round(ramp(219, 96, 29));
+                    const g = Math.round(ramp(234, 165, 78));
+                    const b = Math.round(ramp(254, 250, 216));
+                    return `rgba(${r}, ${g}, ${b}, 0.92)`;
+                }
+            };
+            
+            if (timeslotHeatmapChart) {
+                timeslotHeatmapChart.destroy();
+            }
+            
+            const ctx = document.getElementById('timeslot-heatmap').getContext('2d');
+            const xLabelCount = integratedXLabels.length;
+            const timeSlotCount = timeSlotLabels.length;
+            
+            timeslotHeatmapChart = new Chart(ctx, {
+                type: 'matrix',
+                data: {
+                    datasets: [{
+                        label: '통합 지표',
+                        data: heatmapPoints,
+                        backgroundColor(context) {
+                            const point = context.dataset.data[context.dataIndex];
+                            return getIntegratedColor(point);
+                        },
+                        borderWidth: 0.5,
+                        borderColor: '#e5e7eb',
+                        width: ({ chart }) => (chart.chartArea ? (chart.chartArea.width / xLabelCount) - 1 : 0),
+                        height: ({ chart }) => (chart.chartArea ? (chart.chartArea.height / timeSlotCount) - 1 : 0)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    layout: {
+                        padding: { left: 0, right: 0, top: 0, bottom: 0 }
+                    },
+                    scales: {
+                        x: {
+                            type: 'category',
+                            labels: integratedXLabels,
+                            offset: true,
+                            ticks: {
+                                font: { size: 10 },
+                                color: '#374151',
+                                autoSkip: false
+                            },
+                            grid: { display: false }
+                        },
+                        y: {
+                            type: 'category',
+                            labels: timeSlotAxisLabels,
+                            offset: true,
+                            ticks: {
+                                font: { size: 11 },
+                                color: '#374151'
+                            },
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                title(context) {
+                                    const point = context[0].raw;
+                                    return `${point.weekday}요일 ${point.hour}시`;
+                                },
+                                label(context) {
+                                    const point = context.raw;
+                                    const value = point.v;
+                                    let formattedValue = value.toLocaleString();
+                                    
+                                    if (point.metricLabel === '결제금액') {
+                                        formattedValue += '원';
+                                    } else if (point.metricLabel === '고객수' || point.metricLabel === '결제자수') {
+                                        formattedValue += '명';
+                                    } else if (point.metricLabel === '유입수') {
+                                        formattedValue += '건';
+                                    }
+                                    
+                                    return `${point.metricLabel}: ${formattedValue}`;
+                                }
+                            }
+                        },
+                        legend: { display: false }
+                    },
+                    onClick(event, elements) {
+                        if (elements.length > 0) {
+                            const element = elements[0];
+                            const clickedData = heatmapPoints[element.index];
+                            
+                            selectedHeatmapCell = {
+                                weekday: clickedData.weekday,
+                                hour: clickedData.hour,
+                                hourLabel: clickedData.hourLabel
+                            };
+                            
+                            // 통합보기에서는 채널 차트 업데이트 안함 (숨김 상태)
+                        }
+                    }
+                }
+            });
+        }
+
+        function calculatePaymentMetrics() {
+            // 유입 데이터와 결제 데이터 참조
+            const inflowData = timeslotData.weekday_hourly || [];
+            const salesData = timeslotData.sales_data || [];
+            
+            let totalCustomers = 0;
+            let totalPayers = 0;
+            let totalAmount = 0;
+            let filterText = '전체 기간';
+            
+            // 히트맵 셀 선택 시 필터링
+            if (selectedHeatmapCell) {
+                const weekday = selectedHeatmapCell.weekday;
+                const hour = selectedHeatmapCell.hour;
+                
+                // 유입 데이터에서 고객수 추출
+                const inflowFiltered = inflowData.filter(item => 
+                    item['요일'] === weekday && item['시간'] === hour
+                );
+                totalCustomers = inflowFiltered.reduce((sum, item) => sum + (item['고객수'] || 0), 0);
+                
+                // 결제 데이터에서 결제자수, 결제금액 추출
+                const salesFiltered = salesData.filter(item =>
+                    item['요일'] === weekday && item['시간대'] === hour + '시'
+                );
+                totalPayers = salesFiltered.reduce((sum, item) => sum + (item['결제자수'] || 0), 0);
+                totalAmount = salesFiltered.reduce((sum, item) => sum + (item['결제금액'] || 0), 0);
+                
+                filterText = `${weekday} ${hour}시`;
+            } else {
+                // 전체 데이터 집계
+                totalCustomers = inflowData.reduce((sum, item) => sum + (item['고객수'] || 0), 0);
+                totalPayers = salesData.reduce((sum, item) => sum + (item['결제자수'] || 0), 0);
+                totalAmount = salesData.reduce((sum, item) => sum + (item['결제금액'] || 0), 0);
+            }
+            
+            // 전환율 계산 (결제자수 / 고객수 * 100)
+            const conversionRate = totalCustomers > 0 ? ((totalPayers / totalCustomers) * 100).toFixed(2) : 0;
+            
+            // 객단가 계산 (결제금액 / 결제자수)
+            const avgOrderValue = totalPayers > 0 ? Math.round(totalAmount / totalPayers) : 0;
+            
+            // UI 업데이트
+            document.getElementById('conversion-rate').textContent = conversionRate + '%';
+            document.getElementById('average-order-value').textContent = avgOrderValue.toLocaleString() + '원';
+            document.getElementById('payment-filter-info').textContent = filterText;
         }
 
         function clearHeatmapSelection() {
