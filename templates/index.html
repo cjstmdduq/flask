@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>플라스크 - 데이터 대시보드</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.82em' x='0.5em' text-anchor='middle' font-size='84'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.82em' x='0.5em' text-anchor='middle' font-size='84'%3E%F0%9F%A7%AA%3C/text%3E%3C/svg%3E">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.0/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0/dist/chartjs-chart-matrix.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
@@ -543,7 +544,7 @@
 <body>
     <nav class="navbar">
         <div class="container-fluid">
-            <span class="navbar-brand">📊 플라스크 대시보드</span>
+            <span class="navbar-brand">🧪 플라스크 대시보드</span>
             <span class="text-muted small">데이터 대시보드</span>
         </div>
     </nav>
@@ -556,39 +557,50 @@
                     <li class="sidebar-menu-item active" data-menu="sales-analysis">
                         매출∙광고∙할인 분석
                     </li>
+                    <li class="sidebar-menu-item" data-menu="timeslot-analysis">
+                        시간대별 유입 분석
+                    </li>
                 </ul>
             </aside>
 
             <!-- 메인 컨텐츠 영역 -->
             <div class="content-area">
                 <div class="mt-4">
-                    <!-- 메인 탭 -->
-                    <div class="main-tabs">
-                        <ul class="nav nav-tabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales-dashboard" type="button" role="tab">
-                                    판매성과
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="settle-tab" data-bs-toggle="tab" data-bs-target="#settle-dashboard" type="button" role="tab">
-                                    정산기준
-                                </button>
-                            </li>
-                        </ul>
+                    <!-- 매출∙광고∙할인 분석 섹션 -->
+                    <div id="sales-analysis-section">
+                        <!-- 메인 탭 -->
+                        <div class="main-tabs">
+                            <ul class="nav nav-tabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales-dashboard" type="button" role="tab">
+                                        판매성과
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="settle-tab" data-bs-toggle="tab" data-bs-target="#settle-dashboard" type="button" role="tab">
+                                        정산기준
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- 탭 컨텐츠 -->
+                        <div class="tab-content">
+                            <!-- 판매성과 대시보드 -->
+                            <div class="tab-pane fade show active" id="sales-dashboard" role="tabpanel">
+                                <div id="sales-content"></div>
+                            </div>
+
+                            <!-- 정산기준 대시보드 -->
+                            <div class="tab-pane fade" id="settle-dashboard" role="tabpanel">
+                                <div id="settle-content"></div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- 탭 컨텐츠 -->
-                    <div class="tab-content">
-                        <!-- 판매성과 대시보드 -->
-                        <div class="tab-pane fade show active" id="sales-dashboard" role="tabpanel">
-                            <div id="sales-content"></div>
-                        </div>
-
-                        <!-- 정산기준 대시보드 -->
-                        <div class="tab-pane fade" id="settle-dashboard" role="tabpanel">
-                            <div id="settle-content"></div>
-                        </div>
+                    <!-- 시간대별 유입 분석 섹션 -->
+                    <div id="timeslot-analysis-section" style="display: none;">
+                        <div id="timeslot-content"></div>
                     </div>
                 </div>
             </div>
@@ -614,7 +626,10 @@
         let salesChart;
         let settleChart;
         let modalChart;
+        let timeslotHeatmapChart;
+        let timeslotAreaChart;
         let currentTab = 'sales';
+        let currentSection = 'sales-analysis';
         let activeModalType = null;
         const chartCache = {
             sales: null,
@@ -625,12 +640,15 @@
         let salesData = { total_stats: {}, daily_summary: [] };
         let settleData = { total_stats: {}, daily_summary: [] };
         let adData = { total_stats: {}, daily_summary: [] };
+        let timeslotData = { total_stats: {}, heatmap_data: [], channel_hourly: [], weekday_order: [] };
+        let selectedHeatmapCell = null;
 
         // 초기화
         document.addEventListener('DOMContentLoaded', function() {
             lucide.createIcons();
             initializeDashboards();
             setupTabListeners();
+            setupSidebarListeners();
         });
 
         function setupTabListeners() {
@@ -647,6 +665,33 @@
             });
         }
 
+        function setupSidebarListeners() {
+            document.querySelectorAll('.sidebar-menu-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    // 활성화 상태 변경
+                    document.querySelectorAll('.sidebar-menu-item').forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // 섹션 전환
+                    const menu = this.dataset.menu;
+                    currentSection = menu;
+
+                    if (menu === 'sales-analysis') {
+                        document.getElementById('sales-analysis-section').style.display = 'block';
+                        document.getElementById('timeslot-analysis-section').style.display = 'none';
+                    } else if (menu === 'timeslot-analysis') {
+                        document.getElementById('sales-analysis-section').style.display = 'none';
+                        document.getElementById('timeslot-analysis-section').style.display = 'block';
+
+                        // 타임슬롯 대시보드 초기화 (최초 1회만)
+                        if (!document.getElementById('timeslot-content').innerHTML) {
+                            initializeTimeslotDashboard();
+                        }
+                    }
+                });
+            });
+        }
+
         function initializeDashboards() {
             // 판매성과 대시보드 렌더링
             document.getElementById('sales-content').innerHTML = getDashboardHTML('sales');
@@ -660,6 +705,373 @@
 
             // 초기 데이터 로드
             loadSalesData();
+        }
+
+        function initializeTimeslotDashboard() {
+            document.getElementById('timeslot-content').innerHTML = getTimeslotDashboardHTML();
+            setupTimeslotListeners();
+            setDateRange('timeslot', 30);
+            loadTimeslotData();
+        }
+
+        function getTimeslotDashboardHTML() {
+            return `
+                <!-- 날짜 필터 -->
+                <div class="date-filter-section">
+                    <div style="margin-bottom: 0.75rem;">
+                        <div class="date-filter-title" style="margin-bottom: 0.5rem;">기간 선택</div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="date-preset-btn" data-type="timeslot" data-days="7">최근 7일</button>
+                            <button class="date-preset-btn" data-type="timeslot" data-days="14">최근 14일</button>
+                            <button class="date-preset-btn active" data-type="timeslot" data-days="30">최근 30일</button>
+                            <button class="date-preset-btn" data-type="timeslot" data-preset="this-month">이번달</button>
+                            <button class="date-preset-btn" data-type="timeslot" data-preset="last-month">저번달</button>
+
+                            <span style="color: #d1d5db; margin: 0 0.25rem;">|</span>
+
+                            <input type="date" class="form-control timeslot-date-input" id="timeslot-startDate" style="width: 150px;">
+                            <span style="color: #6b7280;">~</span>
+                            <input type="date" class="form-control timeslot-date-input" id="timeslot-endDate" style="width: 150px;">
+
+                            <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('timeslot', -1)" title="이전">
+                                <i data-lucide="chevron-left"></i>
+                            </button>
+                            <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('timeslot', 1)" title="다음">
+                                <i data-lucide="chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="date-filter-title" style="margin-bottom: 0.5rem;">측정 기준</div>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <label class="checkbox-label">
+                                <input type="radio" name="timeslot-metric" value="customer" checked> 고객수
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="radio" name="timeslot-metric" value="inflow"> 유입수
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <!-- 히트맵 차트 -->
+                    <div class="col-md-7">
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <div class="chart-title">요일/시간대별 유입 히트맵 (골든 타임 파악)</div>
+                            </div>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="timeslot-heatmap"></canvas>
+                            </div>
+                            <div style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">
+                                💡 히트맵의 셀을 클릭하면 해당 시간대의 채널별 유입 현황을 우측 차트에서 확인할 수 있습니다.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 채널별 누적 영역형 차트 -->
+                    <div class="col-md-5">
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <div class="chart-title">시간대별 채널 유입 분포</div>
+                                <button class="chart-expand-btn" onclick="clearHeatmapSelection()" title="전체보기" style="display: none;" id="clear-filter-btn">
+                                    <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                                </button>
+                            </div>
+                            <div id="filter-info" style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem; display: none;">
+                                선택: <span id="filter-info-text"></span>
+                            </div>
+                            <div style="position: relative; height: 360px;">
+                                <canvas id="timeslot-area"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setupTimeslotListeners() {
+            // 날짜 프리셋 버튼
+            document.querySelectorAll('.date-preset-btn[data-type="timeslot"]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.date-preset-btn[data-type="timeslot"]').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+
+                    const days = this.dataset.days;
+                    const preset = this.dataset.preset;
+
+                    if (days) {
+                        setDateRange('timeslot', parseInt(days));
+                    } else if (preset === 'this-month') {
+                        setThisMonth('timeslot');
+                    } else if (preset === 'last-month') {
+                        setLastMonth('timeslot');
+                    }
+
+                    loadTimeslotData();
+                });
+            });
+
+            // 날짜 입력 변경
+            document.querySelectorAll('.timeslot-date-input').forEach(input => {
+                input.addEventListener('change', () => {
+                    loadTimeslotData();
+                });
+            });
+
+            // 메트릭 선택
+            document.querySelectorAll('input[name="timeslot-metric"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    updateTimeslotCharts();
+                });
+            });
+        }
+
+        async function loadTimeslotData() {
+            const startDate = document.getElementById('timeslot-startDate').value;
+            const endDate = document.getElementById('timeslot-endDate').value;
+
+            try {
+                const response = await fetch(`/api/timeslot_data?start_date=${startDate}&end_date=${endDate}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    timeslotData = result.data;
+                    selectedHeatmapCell = null;
+                    updateTimeslotCharts();
+                    lucide.createIcons();
+                }
+            } catch (error) {
+                console.error('타임슬롯 데이터 로드 오류:', error);
+            }
+        }
+
+        function updateTimeslotCharts() {
+            const metric = document.querySelector('input[name="timeslot-metric"]:checked').value;
+            updateHeatmapChart(metric);
+            updateAreaChart(metric);
+        }
+
+        function updateHeatmapChart(metric) {
+            const metricKey = metric === 'customer' ? '고객수' : '유입수';
+            const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
+
+            // 히트맵 데이터 변환 - X축: 요일, Y축: 시간대
+            const heatmapPoints = [];
+            timeslotData.heatmap_data.forEach(item => {
+                heatmapPoints.push({
+                    x: weekdayOrder.indexOf(item['요일']),  // X축: 요일 인덱스
+                    y: item['시간'],                        // Y축: 시간
+                    v: item[metricKey] || 0,
+                    weekday: item['요일'],
+                    hour: item['시간']
+                });
+            });
+
+            // 최대값 계산 (색상 스케일용)
+            const maxValue = Math.max(...heatmapPoints.map(p => p.v));
+
+            if (timeslotHeatmapChart) {
+                timeslotHeatmapChart.destroy();
+            }
+
+            const ctx = document.getElementById('timeslot-heatmap').getContext('2d');
+            timeslotHeatmapChart = new Chart(ctx, {
+                type: 'matrix',
+                data: {
+                    datasets: [{
+                        label: metricKey,
+                        data: heatmapPoints,
+                        backgroundColor(context) {
+                            const value = context.dataset.data[context.dataIndex].v;
+                            const alpha = maxValue > 0 ? value / maxValue : 0;
+                            return `rgba(59, 130, 246, ${alpha * 0.8 + 0.2})`;
+                        },
+                        borderWidth: 1,
+                        borderColor: '#e5e7eb',
+                        width: ({chart}) => (chart.chartArea || {}).width / 7 - 1,   // 7개 요일
+                        height: ({chart}) => (chart.chartArea || {}).height / 24 - 1  // 24시간
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title() {
+                                    return '';
+                                },
+                                label(context) {
+                                    const v = context.dataset.data[context.dataIndex];
+                                    return `${v.weekday} ${v.hour}시: ${v.v.toLocaleString()}${metric === 'customer' ? '명' : '건'}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'category',
+                            labels: weekdayOrder,
+                            position: 'bottom',
+                            offset: true,
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            min: -0.5,
+                            max: 23.5,
+                            ticks: {
+                                stepSize: 1,
+                                callback: (value) => value >= 0 && value <= 23 ? `${value}시` : ''
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const dataIndex = elements[0].index;
+                            const clickedData = heatmapPoints[dataIndex];
+                            selectedHeatmapCell = {
+                                hour: clickedData.hour,
+                                weekday: clickedData.weekday
+                            };
+                            updateAreaChart(metric);
+
+                            // 필터 정보 표시
+                            document.getElementById('filter-info').style.display = 'block';
+                            document.getElementById('filter-info-text').textContent = `${clickedData.weekday} ${clickedData.hour}시`;
+                            document.getElementById('clear-filter-btn').style.display = 'block';
+                            lucide.createIcons();
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateAreaChart(metric) {
+            const metricKey = metric === 'customer' ? '고객수' : '유입수';
+
+            // 데이터 필터링 및 집계
+            let channelData = timeslotData.channel_hourly;
+
+            // 히트맵 셀 선택 시 필터링
+            if (selectedHeatmapCell) {
+                // 원본 데이터에서 선택된 요일/시간 필터링
+                const rawData = timeslotData.heatmap_data;
+                const filtered = rawData.filter(item =>
+                    item['요일'] === selectedHeatmapCell.weekday &&
+                    item['시간'] === selectedHeatmapCell.hour
+                );
+
+                // 선택된 시간대의 채널별 데이터 재구성
+                channelData = [];
+                // 실제 구현 시 원본 데이터에서 채널별로 집계 필요
+                // 현재는 channel_hourly 데이터에서 해당 시간만 필터링
+                channelData = timeslotData.channel_hourly.filter(item => item['시간'] === selectedHeatmapCell.hour);
+            }
+
+            // 시간대별, 채널별로 그룹화
+            const hours = [...new Set(channelData.map(item => item['시간']))].sort((a, b) => a - b);
+            const channels = [...new Set(channelData.map(item => item['채널그룹']))];
+
+            // 채널별 색상 매핑
+            const channelColors = {
+                '검색': '#3b82f6',
+                '검색광고': '#8b5cf6',
+                '쇼핑': '#10b981',
+                '기타': '#6b7280',
+                '웹사이트': '#f59e0b',
+                '일반유입': '#ef4444',
+                '사용자정의': '#ec4899'
+            };
+
+            // 데이터셋 생성
+            const datasets = channels.map(channel => {
+                const data = hours.map(hour => {
+                    const item = channelData.find(d => d['시간'] === hour && d['채널그룹'] === channel);
+                    return item ? item[metricKey] : 0;
+                });
+
+                return {
+                    label: channel,
+                    data: data,
+                    backgroundColor: channelColors[channel] || '#94a3b8',
+                    borderColor: channelColors[channel] || '#94a3b8',
+                    borderWidth: 1,
+                    fill: true
+                };
+            });
+
+            if (timeslotAreaChart) {
+                timeslotAreaChart.destroy();
+            }
+
+            const ctx = document.getElementById('timeslot-area').getContext('2d');
+            timeslotAreaChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: hours.map(h => `${h}시`),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    elements: {
+                        line: {
+                            tension: 0.4
+                        },
+                        point: {
+                            radius: 0
+                        }
+                    }
+                }
+            });
+        }
+
+        function clearHeatmapSelection() {
+            selectedHeatmapCell = null;
+            const metric = document.querySelector('input[name="timeslot-metric"]:checked').value;
+            updateAreaChart(metric);
+
+            document.getElementById('filter-info').style.display = 'none';
+            document.getElementById('clear-filter-btn').style.display = 'none';
         }
 
         function getDashboardHTML(type) {
@@ -800,55 +1212,70 @@
 
                     <!-- 우측: 목표 광고비율 분석 -->
                     <div class="col-md-3">
-                        <div class="analysis-section">
+                        <!-- 인풋 (Input) 컨테이너 -->
+                        <div class="analysis-section" style="margin-bottom: 1rem;">
                             <div class="analysis-header">
-                                <i data-lucide="target"></i>
-                                <div class="analysis-title">적정 광고비율 분석</div>
+                                <div class="analysis-title">입력 설정</div>
                             </div>
 
-                            <div class="analysis-input-group">
+                            <div class="analysis-input-group" style="margin-bottom: 0;">
                                 <div class="analysis-label">목표 광고비율 기준 보정 계산</div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <input type="number" class="analysis-input" id="${prefix}-targetMargin" value="10" min="0" max="100" step="0.1">
                                     <span style="font-size: 0.875rem; color: #6b7280;">%</span>
                                 </div>
                             </div>
+                        </div>
 
-                            <div class="analysis-input-group">
-                                <div class="analysis-label">목표 광고비율 (%)</div>
-                                <div class="analysis-result">
-                                    <span class="analysis-result-label">전체 광고비율</span>
-                                    <span class="analysis-result-value" id="${prefix}-actualMargin">0.00%</span>
-                                </div>
-                                <div class="analysis-result">
-                                    <span class="analysis-result-label">보정 비율</span>
-                                    <span class="analysis-result-value" id="${prefix}-adjustedMargin">0.00%</span>
-                                </div>
+                        <!-- 아웃풋 (Output) 컨테이너 -->
+                        <div class="analysis-section">
+                            <div class="analysis-header">
+                                <div class="analysis-title">분석 결과</div>
                             </div>
 
+                            <!-- 숨김: 해당기간 적정 광고비 -->
                             <div class="highlighted-result analysis-hidden">
                                 <div class="analysis-label">해당기간 적정 광고비</div>
                                 <div class="highlighted-result-value" id="${prefix}-dailyTargetAd">₩0</div>
                             </div>
 
-                            <div class="highlighted-result">
-                                <div class="analysis-label">집계기간별 적정광고비</div>
-                                <div class="highlighted-period-group">
-                                    <div class="highlighted-period-label">7일 기준</div>
-                                    <div class="sub-result-value" id="${prefix}-dailyTargetAd7">₩0</div>
+                            <!-- 집계기간별 적정광고비 -->
+                            <div class="analysis-label" style="margin-bottom: 1rem;">집계기간별 적정광고비</div>
+                            
+                            <!-- 7일 기준 -->
+                            <div class="highlighted-period-group">
+                                <div class="highlighted-period-label">7일 기준</div>
+                                <div class="sub-result-value" id="${prefix}-dailyTargetAd7">₩0</div>
+                                <div style="font-size: 0.7rem; color: #9ca3af; margin-top: 0.25rem; line-height: 1.4;">
+                                    <span>전체 광고비율: <span id="${prefix}-actualMargin7">0.00%</span></span>
+                                    <span style="margin-left: 0.5rem;">보정: <span id="${prefix}-adjustedMargin7">0.00%</span></span>
                                 </div>
-                                <div class="highlighted-period-group">
-                                    <div class="highlighted-period-label">14일 기준</div>
-                                    <div class="sub-result-value" id="${prefix}-dailyTargetAd14">₩0</div>
+                            </div>
+
+                            <!-- 14일 기준 -->
+                            <div class="highlighted-period-group">
+                                <div class="highlighted-period-label">14일 기준</div>
+                                <div class="sub-result-value" id="${prefix}-dailyTargetAd14">₩0</div>
+                                <div style="font-size: 0.7rem; color: #9ca3af; margin-top: 0.25rem; line-height: 1.4;">
+                                    <span>전체 광고비율: <span id="${prefix}-actualMargin14">0.00%</span></span>
+                                    <span style="margin-left: 0.5rem;">보정: <span id="${prefix}-adjustedMargin14">0.00%</span></span>
                                 </div>
-                                <div class="highlighted-period-group">
-                                    <div class="highlighted-period-label">30일 기준</div>
-                                    <div class="sub-result-value" id="${prefix}-dailyTargetAd30">₩0</div>
+                            </div>
+
+                            <!-- 30일 기준 -->
+                            <div class="highlighted-period-group">
+                                <div class="highlighted-period-label">30일 기준</div>
+                                <div class="sub-result-value" id="${prefix}-dailyTargetAd30">₩0</div>
+                                <div style="font-size: 0.7rem; color: #9ca3af; margin-top: 0.25rem; line-height: 1.4;">
+                                    <span>전체 광고비율: <span id="${prefix}-actualMargin30">0.00%</span></span>
+                                    <span style="margin-left: 0.5rem;">보정: <span id="${prefix}-adjustedMargin30">0.00%</span></span>
                                 </div>
-                                <div class="highlighted-average">
-                                    <div class="highlighted-period-label">최종 평균값</div>
-                                    <div class="highlighted-result-value" id="${prefix}-dailyTargetAdAvg">₩0</div>
-                                </div>
+                            </div>
+
+                            <!-- 최종 평균값 -->
+                            <div class="highlighted-average">
+                                <div class="highlighted-period-label">최종 평균값</div>
+                                <div class="highlighted-result-value" id="${prefix}-dailyTargetAdAvg">₩0</div>
                             </div>
                         </div>
                     </div>
@@ -1635,11 +2062,10 @@
             const days = data.daily_summary.length || 1;
             const dailyTargetAd = (netSales * (adjustedMargin / 100)) / days;
 
-            document.getElementById(`${prefix}-actualMargin`).textContent = actualMargin.toFixed(2) + '%';
-            document.getElementById(`${prefix}-adjustedMargin`).textContent = adjustedMargin.toFixed(2) + '%';
+            // 숨김 요소: 해당기간 적정 광고비
             document.getElementById(`${prefix}-dailyTargetAd`).textContent = formatCurrency(dailyTargetAd);
 
-            // 고급 분석: 7일, 14일, 30일 기준 평균값 계산
+            // 고급 분석: 7일, 14일, 30일 기준 평균값 계산 (각 기간별 actualMargin, adjustedMargin 포함)
             await calculateAdvancedMarginAnalysis(type, adjustedMargin);
         }
 
@@ -1684,15 +2110,24 @@
                         const dailyTargetAdPeriod = (periodNetSales * (periodAdjustedMargin / 100)) / period;
                         results.push(dailyTargetAdPeriod);
 
+                        // 적정 광고비 업데이트
                         document.getElementById(`${prefix}-dailyTargetAd${period}`).textContent = formatCurrency(dailyTargetAdPeriod);
+                        
+                        // 각 기간별 전체 광고비율과 보정 비율 업데이트
+                        document.getElementById(`${prefix}-actualMargin${period}`).textContent = periodActualMargin.toFixed(2) + '%';
+                        document.getElementById(`${prefix}-adjustedMargin${period}`).textContent = periodAdjustedMargin.toFixed(2) + '%';
                     } else {
                         results.push(0);
                         document.getElementById(`${prefix}-dailyTargetAd${period}`).textContent = '₩0';
+                        document.getElementById(`${prefix}-actualMargin${period}`).textContent = '0.00%';
+                        document.getElementById(`${prefix}-adjustedMargin${period}`).textContent = '0.00%';
                     }
                 } catch (error) {
                     console.error(`${period}일 기준 데이터 로드 오류:`, error);
                     results.push(0);
                     document.getElementById(`${prefix}-dailyTargetAd${period}`).textContent = '₩0';
+                    document.getElementById(`${prefix}-actualMargin${period}`).textContent = '0.00%';
+                    document.getElementById(`${prefix}-adjustedMargin${period}`).textContent = '0.00%';
                 }
             }
 

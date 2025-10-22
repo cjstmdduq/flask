@@ -527,5 +527,78 @@ def get_ad_data():
             'message': f'광고비 데이터 조회 중 오류가 발생했습니다: {str(e)}'
         }), 500
 
+@app.route('/api/timeslot_data')
+def get_timeslot_data():
+    """시간대별 유입 데이터 조회"""
+    try:
+        timeslot_file = 'data/timeslot.csv'
+
+        if not os.path.exists(timeslot_file):
+            return jsonify({
+                'success': False,
+                'message': '시간대 데이터 파일을 찾을 수 없습니다.'
+            }), 404
+
+        # CSV 읽기
+        df = pd.read_csv(timeslot_file, encoding='utf-8-sig')
+
+        # 날짜 필터링
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        # 날짜 컬럼을 날짜 형식으로 변환
+        df['날짜'] = pd.to_datetime(df['날짜'].str.rstrip('.'), format='%Y.%m.%d', errors='coerce')
+
+        # 날짜 파싱에 실패한 행 제거
+        df = df.dropna(subset=['날짜'])
+
+        if start_date:
+            df = df[df['날짜'] >= start_date]
+        if end_date:
+            df = df[df['날짜'] <= end_date]
+
+        # 시간대 숫자 추출 (예: "00시" -> 0)
+        df['시간'] = df['시간대'].str.extract(r'(\d+)').astype(int)
+
+        # 요일 순서 정의 (일-토)
+        weekday_order = ['일', '월', '화', '수', '목', '금', '토']
+        df['요일_순서'] = df['요일'].apply(lambda x: weekday_order.index(x) if x in weekday_order else -1)
+
+        # 히트맵용 데이터: 요일별/시간대별 집계
+        heatmap_data = df.groupby(['요일', '요일_순서', '시간']).agg({
+            '고객수': 'sum',
+            '유입수': 'sum'
+        }).reset_index().sort_values(['요일_순서', '시간'])
+
+        # 채널별 시간대 데이터
+        channel_hourly = df.groupby(['시간', '채널그룹']).agg({
+            '고객수': 'sum',
+            '유입수': 'sum'
+        }).reset_index()
+
+        # 전체 통계
+        total_stats = {
+            'total_customers': int(df['고객수'].sum()),
+            'total_inflows': int(df['유입수'].sum()),
+            'unique_channels': int(df['채널그룹'].nunique()),
+            'date_range_days': int((df['날짜'].max() - df['날짜'].min()).days + 1)
+        }
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_stats': total_stats,
+                'heatmap_data': heatmap_data.to_dict('records'),
+                'channel_hourly': channel_hourly.to_dict('records'),
+                'weekday_order': weekday_order
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'시간대 데이터 조회 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5050)
