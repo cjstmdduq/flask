@@ -558,7 +558,7 @@
                         매출∙광고∙할인 분석
                     </li>
                     <li class="sidebar-menu-item" data-menu="timeslot-analysis">
-                        시간대별 유입 분석
+                        시간대별 유입&결제 분석
                     </li>
                 </ul>
             </aside>
@@ -849,6 +849,12 @@
                             <label class="checkbox-label">
                                 <input type="radio" name="timeslot-metric" value="inflow"> 유입수
                             </label>
+                            <label class="checkbox-label">
+                                <input type="radio" name="timeslot-metric" value="payers"> 결제자수
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="radio" name="timeslot-metric" value="amount"> 결제금액
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -887,12 +893,20 @@
                                 <div id="filter-info" style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.75rem; display: none;">
                                     선택: <span id="filter-info-text"></span>
                                 </div>
-                                <div style="position: relative; height: 300px; margin-bottom: 1.5rem;">
-                                    <canvas id="timeslot-area"></canvas>
+                                <!-- 결제 지표 선택 시 표시할 메시지 -->
+                                <div id="payment-metric-message" style="display: none; text-align: center; padding: 4rem 2rem; color: #6b7280;">
+                                    
+                                    <div style="font-size: 1.125rem; font-weight: 500; margin-bottom: 0.5rem;">결제 관련 상세 데이터</div>
+                                    <div style="font-size: 0.875rem;">채널별 상세 데이터는 제공되지 않습니다</div>
                                 </div>
-                                <!-- 채널 목록 -->
-                                <div id="channel-list">
-                                    <!-- JavaScript로 동적 생성 -->
+                                <div id="channel-chart-content">
+                                    <div style="position: relative; height: 300px; margin-bottom: 1.5rem;">
+                                        <canvas id="timeslot-area"></canvas>
+                                    </div>
+                                    <!-- 채널 목록 -->
+                                    <div id="channel-list">
+                                        <!-- JavaScript로 동적 생성 -->
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -963,7 +977,13 @@
         }
 
         function updateHeatmapChart(metric) {
-            const metricKey = metric === 'customer' ? '고객수' : '유입수';
+            const metricMap = {
+                'customer': '고객수',
+                'inflow': '유입수',
+                'payers': '결제자수',
+                'amount': '결제금액'
+            };
+            const metricKey = metricMap[metric] || '고객수';
             const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
             const timeSlotLabels = Array.from({ length: 24 }, (_, hour) => {
                 const nextHour = hour + 1;
@@ -990,7 +1010,7 @@
                 totalsByWeekday.set(weekday, (totalsByWeekday.get(weekday) || 0) + value);
             });
             const columnTotals = weekdayOrder.map(day => totalsByWeekday.get(day) || 0);
-            const metricSuffix = metric === 'customer' ? '명' : '건';
+            const metricSuffix = '';  // 요일별 합계에 단위 제거
 
             // 최대값 계산 (색상 스케일용)
             const maxValue = heatmapPoints.length ? Math.max(...heatmapPoints.map(p => p.v)) : 0;
@@ -1007,10 +1027,21 @@
                     const t = (normalized - 0.5) * 2;
                     return mid + (end - mid) * t;
                 };
-                const r = Math.round(ramp(219, 96, 30));
-                const g = Math.round(ramp(234, 165, 64));
-                const b = Math.round(ramp(254, 250, 175));
-                return `rgba(${r}, ${g}, ${b}, 0.92)`;
+
+                // 측정 기준에 따라 색상 구분
+                if (metric === 'payers' || metric === 'amount') {
+                    // 결제 관련 지표: 녹색 계열 (연한 연두 -> 중간 녹색 -> 진한 녹색)
+                    const r = Math.round(ramp(220, 74, 21));
+                    const g = Math.round(ramp(252, 222, 128));
+                    const b = Math.round(ramp(231, 145, 61));
+                    return `rgba(${r}, ${g}, ${b}, 0.92)`;
+                } else {
+                    // 고객수/유입수: 파란색 계열 (연한 하늘색 -> 중간 파랑 -> 진한 파랑)
+                    const r = Math.round(ramp(219, 96, 29));
+                    const g = Math.round(ramp(234, 165, 78));
+                    const b = Math.round(ramp(254, 250, 216));
+                    return `rgba(${r}, ${g}, ${b}, 0.92)`;
+                }
             };
 
             if (timeslotHeatmapChart) {
@@ -1134,7 +1165,26 @@
         }
 
         function updateAreaChart(metric) {
-            const metricKey = metric === 'customer' ? '고객수' : '유입수';
+            // 결제 관련 지표 선택 시 메시지 표시, 차트 내용 숨기기
+            const paymentMessage = document.getElementById('payment-metric-message');
+            const channelChartContent = document.getElementById('channel-chart-content');
+            
+            if (metric === 'payers' || metric === 'amount') {
+                if (paymentMessage) paymentMessage.style.display = 'block';
+                if (channelChartContent) channelChartContent.style.display = 'none';
+                return;
+            } else {
+                if (paymentMessage) paymentMessage.style.display = 'none';
+                if (channelChartContent) channelChartContent.style.display = 'block';
+            }
+
+            const metricMap = {
+                'customer': '고객수',
+                'inflow': '유입수',
+                'payers': '결제자수',
+                'amount': '결제금액'
+            };
+            const metricKey = metricMap[metric] || '고객수';
 
             // 데이터 필터링 및 집계
             const overallChannelData = timeslotData.channel_hourly || [];
@@ -1272,12 +1322,13 @@
                                     const label = context.label || '';
                                     const value = context.parsed || 0;
                                     const percentage = ((value / totalValue) * 100).toFixed(1);
-                                    return `${label}: ${value.toLocaleString()}${metric === 'customer' ? '명' : '건'} (${percentage}%)`;
+                                    const suffix = metric === 'customer' ? '명' : (metric === 'payers' ? '명' : (metric === 'amount' ? '원' : '건'));
+                                    return `${label}: ${value.toLocaleString()}${suffix} (${percentage}%)`;
                                 }
                             }
                         },
                         doughnutCenterText: {
-                            text: `${totalValue.toLocaleString()}${metric === 'customer' ? '명' : '건'}`,
+                            text: `${totalValue.toLocaleString()}${metric === 'customer' ? '명' : (metric === 'payers' ? '명' : (metric === 'amount' ? '원' : '건'))}`,
                             color: '#1f2937'
                         }
                     },
@@ -1293,6 +1344,7 @@
             });
 
             // 채널 목록 생성
+            const suffix = metric === 'customer' ? '명' : (metric === 'payers' ? '명' : (metric === 'amount' ? '원' : '건'));
             const channelListHtml = channels.map((channel, idx) => {
                 const value = totals[idx];
                 const percentage = ((value / totalValue) * 100).toFixed(1);
@@ -1305,7 +1357,7 @@
                             <span style="color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${channel}">${channel}</span>
                         </div>
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; margin-left: 1rem;">
-                            <span style="color: #6b7280; font-weight: 500;">${value.toLocaleString()}${metric === 'customer' ? '명' : '건'}</span>
+                            <span style="color: #6b7280; font-weight: 500;">${value.toLocaleString()}${suffix}</span>
                             <span style="color: #9ca3af; font-size: 0.8125rem;">(${percentage}%)</span>
                         </div>
                     </div>
@@ -1322,8 +1374,14 @@
             }
 
             const metric = document.querySelector('input[name="timeslot-metric"]:checked').value;
-            const metricKey = metric === 'customer' ? '고객수' : '유입수';
-            const metricLabel = metric === 'customer' ? '고객수' : '유입수';
+            const metricMap = {
+                'customer': '고객수',
+                'inflow': '유입수',
+                'payers': '결제자수',
+                'amount': '결제금액'
+            };
+            const metricKey = metricMap[metric] || '고객수';
+            const metricLabel = metricKey;
             const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
 
             // 히트맵 데이터를 2차원 배열로 변환

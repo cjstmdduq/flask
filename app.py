@@ -529,9 +529,10 @@ def get_ad_data():
 
 @app.route('/api/timeslot_data')
 def get_timeslot_data():
-    """시간대별 유입 데이터 조회"""
+    """시간대별 유입 및 결제 데이터 조회"""
     try:
         timeslot_file = 'data/timeslot.csv'
+        sales_file = 'data/SalesPerformance.csv'
 
         if not os.path.exists(timeslot_file):
             return jsonify({
@@ -539,7 +540,7 @@ def get_timeslot_data():
                 'message': '시간대 데이터 파일을 찾을 수 없습니다.'
             }), 404
 
-        # CSV 읽기
+        # 유입 데이터 CSV 읽기
         df = pd.read_csv(timeslot_file, encoding='utf-8-sig')
 
         # 날짜 필터링
@@ -576,11 +577,71 @@ def get_timeslot_data():
         # NaN 값을 빈 문자열로 변환 (groupby에서 NaN이 제외되지 않도록)
         df['채널상세'] = df['채널상세'].fillna('')
 
-        # 히트맵용 데이터: 요일별/시간대별 집계
+        # 결제 데이터 로드 및 병합
+        if os.path.exists(sales_file):
+            sales_df = pd.read_csv(sales_file, encoding='utf-8-sig')
+
+            # 결제 데이터 날짜 변환
+            sales_df['날짜'] = pd.to_datetime(sales_df['날짜'].str.rstrip('.'), format='%Y.%m.%d', errors='coerce')
+            sales_df = sales_df.dropna(subset=['날짜'])
+
+            # 날짜 필터링
+            if start_date:
+                try:
+                    start = pd.to_datetime(start_date)
+                    sales_df = sales_df[sales_df['날짜'] >= start]
+                except (ValueError, TypeError):
+                    pass
+            if end_date:
+                try:
+                    end = pd.to_datetime(end_date)
+                    sales_df = sales_df[sales_df['날짜'] <= end]
+                except (ValueError, TypeError):
+                    pass
+
+            # 시간대 숫자 추출
+            sales_df['시간'] = sales_df['시간대'].str.extract(r'(\d+)').astype(int)
+
+            # 요일 순서
+            sales_df['요일_순서'] = sales_df['요일'].apply(lambda x: weekday_order.index(x) if x in weekday_order else -1)
+            sales_df = sales_df[sales_df['요일_순서'] >= 0]
+
+            # 숫자 컬럼 변환
+            def safe_float_convert(series):
+                return pd.to_numeric(
+                    series.astype(str).str.replace(',', '').str.strip().replace('', '0').replace('nan', '0'),
+                    errors='coerce'
+                ).fillna(0)
+
+            sales_df['결제자수'] = safe_float_convert(sales_df['결제자수'])
+            sales_df['결제금액'] = safe_float_convert(sales_df['결제금액'])
+
+            # 결제 데이터 집계
+            payment_heatmap = sales_df.groupby(['요일', '요일_순서', '시간']).agg({
+                '결제자수': 'sum',
+                '결제금액': 'sum'
+            }).reset_index()
+        else:
+            payment_heatmap = None
+
+        # 히트맵용 데이터: 요일별/시간대별 집계 (유입 데이터)
         heatmap_data = df.groupby(['요일', '요일_순서', '시간']).agg({
             '고객수': 'sum',
             '유입수': 'sum'
         }).reset_index().sort_values(['요일_순서', '시간'])
+
+        # 결제 데이터 병합
+        if payment_heatmap is not None:
+            heatmap_data = heatmap_data.merge(
+                payment_heatmap,
+                on=['요일', '요일_순서', '시간'],
+                how='left'
+            )
+            heatmap_data['결제자수'] = heatmap_data['결제자수'].fillna(0).astype(int)
+            heatmap_data['결제금액'] = heatmap_data['결제금액'].fillna(0).astype(int)
+        else:
+            heatmap_data['결제자수'] = 0
+            heatmap_data['결제금액'] = 0
 
         # 채널별 시간대 데이터 (채널그룹, 채널명, 채널상세 포함)
         channel_hourly = df.groupby(['시간', '채널그룹', '채널명', '채널상세']).agg({
