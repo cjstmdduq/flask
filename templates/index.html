@@ -857,9 +857,14 @@
                     <!-- 히트맵 차트 -->
                         <div class="col-md-7">
                             <div class="chart-container">
-                                <div class="chart-header" style="flex-direction: column; align-items: flex-start; gap: 0.35rem;">
-                                    <div class="chart-title">요일/시간대별 유입 히트맵 (골든 타임 파악)</div>
-                                    <div class="chart-subtitle" id="timeslot-date-range" style="font-size: 0.8rem; color: #6b7280;"></div>
+                                <div class="chart-header">
+                                    <div style="flex-direction: column; align-items: flex-start; gap: 0.35rem; flex: 1;">
+                                        <div class="chart-title">요일/시간대별 유입 히트맵 (골든 타임 파악)</div>
+                                        <div class="chart-subtitle" id="timeslot-date-range" style="font-size: 0.8rem; color: #6b7280;"></div>
+                                    </div>
+                                    <button class="chart-expand-btn" onclick="downloadHeatmapCSV()" title="CSV 다운로드">
+                                        <i data-lucide="download" style="width: 16px; height: 16px;"></i>
+                                    </button>
                                 </div>
                             <div style="position: relative; height: 520px;">
                                 <canvas id="timeslot-heatmap"></canvas>
@@ -879,11 +884,16 @@
                                         <i data-lucide="x" style="width: 16px; height: 16px;"></i>
                                     </button>
                                 </div>
-                                <div id="filter-info" style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem; display: none;">
-                                선택: <span id="filter-info-text"></span>
-                            </div>
-                            <div style="position: relative; height: 360px;">
-                                <canvas id="timeslot-area"></canvas>
+                                <div id="filter-info" style="font-size: 0.875rem; color: #6b7280; margin-bottom: 0.75rem; display: none;">
+                                    선택: <span id="filter-info-text"></span>
+                                </div>
+                                <div style="position: relative; height: 300px; margin-bottom: 1.5rem;">
+                                    <canvas id="timeslot-area"></canvas>
+                                </div>
+                                <!-- 채널 목록 -->
+                                <div id="channel-list">
+                                    <!-- JavaScript로 동적 생성 -->
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1144,27 +1154,49 @@
                 }
             }
 
-            // 채널별 색상 매핑
-            const channelColors = {
-                '검색': '#3b82f6',
-                '검색광고': '#8b5cf6',
-                '쇼핑': '#10b981',
-                '기타': '#6b7280',
-                '웹사이트': '#f59e0b',
-                '일반유입': '#ef4444',
-                '사용자정의': '#ec4899'
+            // 채널그룹별 기본 색상 (HSL 기반)
+            const channelGroupBaseColors = {
+                '검색': { h: 217, s: 91, l: 60 },      // 파란색
+                '검색광고': { h: 262, s: 83, l: 58 },  // 보라색
+                '쇼핑': { h: 160, s: 84, l: 39 },      // 초록색
+                '기타': { h: 220, s: 9, l: 46 },       // 회색
+                '웹사이트': { h: 38, s: 92, l: 50 },   // 주황색
+                '일반유입': { h: 0, s: 84, l: 60 },    // 빨간색
+                '사용자정의': { h: 330, s: 81, l: 60 }, // 핑크색
+                '소셜': { h: 173, s: 80, l: 40 },      // 청록색
+                '메신저': { h: 280, s: 65, l: 55 },    // 자주색
+                '광고': { h: 24, s: 95, l: 53 },       // 주황빨강
+                '디스플레이': { h: 45, s: 93, l: 47 }  // 황금색
             };
 
-            // 채널별 총합 집계
+            // 채널별 총합 집계 (채널그룹 > 채널명 > 채널상세 3단계 계층 구조)
             const channelTotalsMap = new Map();
+
             channelData.forEach(item => {
-                const channel = item['채널그룹'] || '기타';
+                const channelGroup = item['채널그룹'] || '기타';
+                const channelName = item['채널명'] || '기타';
+                const channelDetail = item['채널상세'] ? item['채널상세'].trim() : '';
+
+                // 3단계 계층 구조로 구분
+                let channel;
+                if (channelDetail) {
+                    // 3뎁스 모두 존재: 채널그룹 > 채널명 > 채널상세
+                    channel = `${channelGroup} > ${channelName} > ${channelDetail}`;
+                } else {
+                    // 3뎁스 없음: 채널그룹 > 채널명
+                    channel = `${channelGroup} > ${channelName}`;
+                }
+
                 const value = Number(item[metricKey]) || 0;
                 channelTotalsMap.set(channel, (channelTotalsMap.get(channel) || 0) + value);
             });
 
-            const channels = Array.from(channelTotalsMap.keys());
-            const totals = channels.map(channel => channelTotalsMap.get(channel));
+            // 내림차순 정렬 (값이 큰 순서대로)
+            const channelEntries = Array.from(channelTotalsMap.entries())
+                .sort((a, b) => b[1] - a[1]);  // [채널명, 값] 형태의 배열을 값 기준 내림차순 정렬
+
+            const channels = channelEntries.map(entry => entry[0]);
+            const totals = channelEntries.map(entry => entry[1]);
             const totalValue = totals.reduce((sum, val) => sum + val, 0);
 
             // 차트 데이터가 없으면 초기화 후 종료
@@ -1180,6 +1212,38 @@
                 timeslotChannelChart.destroy();
             }
 
+            // 채널별 색상 할당 함수 (1뎁스=계열, 2뎁스=농도)
+            function getChannelColor(channelFullName, index, allChannels) {
+                const parts = channelFullName.split(' > ');
+                const channelGroup = parts[0];  // 1뎁스
+                const channelName = parts[1];   // 2뎁스
+
+                // 1뎁스(채널그룹) 기본 색상
+                let baseColor = channelGroupBaseColors[channelGroup];
+
+                if (!baseColor) {
+                    // 매핑되지 않은 채널그룹은 기본 색상
+                    return `hsl(${(index * 137) % 360}, 70%, 50%)`;
+                }
+
+                // 같은 채널그룹 내의 채널명들을 찾아 인덱스 계산
+                const sameGroupChannels = allChannels.filter(ch => ch.startsWith(channelGroup + ' > '));
+                const channelNameIndex = sameGroupChannels.findIndex(ch => ch === channelFullName);
+                const totalInGroup = sameGroupChannels.length;
+
+                // 2뎁스(채널명)별로 농도 조절
+                let lightness = baseColor.l;
+                if (totalInGroup > 1) {
+                    // 여러 채널이 있으면 농도를 분산 (어두운 것부터 밝은 것까지)
+                    const lightnessRange = 30; // 농도 변화 범위
+                    const step = lightnessRange / Math.max(totalInGroup - 1, 1);
+                    lightness = baseColor.l - (lightnessRange / 2) + (step * channelNameIndex);
+                    lightness = Math.max(25, Math.min(75, lightness)); // 25~75% 범위로 제한
+                }
+
+                return `hsl(${baseColor.h}, ${baseColor.s}%, ${lightness}%)`;
+            }
+
             const ctx = document.getElementById('timeslot-area').getContext('2d');
             timeslotChannelChart = new Chart(ctx, {
                 type: 'doughnut',
@@ -1188,7 +1252,7 @@
                     datasets: [{
                         label: metricKey,
                         data: totals,
-                        backgroundColor: channels.map(channel => channelColors[channel] || '#94a3b8'),
+                        backgroundColor: channels.map((channel, idx) => getChannelColor(channel, idx, channels)),
                         borderColor: '#ffffff',
                         borderWidth: 1
                     }]
@@ -1196,24 +1260,19 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '55%',
+                    cutout: '60%',
                     animation: false,
                     plugins: {
                         legend: {
-                            display: true,
-                            position: 'right',
-                            labels: {
-                                boxWidth: 16,
-                                boxHeight: 16,
-                                padding: 16
-                            }
+                            display: false  // 범례 숨김 (아래 리스트로 대체)
                         },
                         tooltip: {
                             callbacks: {
                                 label(context) {
                                     const label = context.label || '';
                                     const value = context.parsed || 0;
-                                    return `${label}: ${value.toLocaleString()}${metric === 'customer' ? '명' : '건'}`;
+                                    const percentage = ((value / totalValue) * 100).toFixed(1);
+                                    return `${label}: ${value.toLocaleString()}${metric === 'customer' ? '명' : '건'} (${percentage}%)`;
                                 }
                             }
                         },
@@ -1224,14 +1283,102 @@
                     },
                     layout: {
                         padding: {
-                            top: 12,
-                            bottom: 12,
-                            left: 12,
-                            right: 12
+                            top: 16,
+                            bottom: 16,
+                            left: 16,
+                            right: 16
                         }
                     }
                 }
             });
+
+            // 채널 목록 생성
+            const channelListHtml = channels.map((channel, idx) => {
+                const value = totals[idx];
+                const percentage = ((value / totalValue) * 100).toFixed(1);
+                const color = getChannelColor(channel, idx, channels);
+
+                return `
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; border-bottom: 1px solid #f3f4f6; font-size: 0.875rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0;">
+                            <div style="width: 12px; height: 12px; border-radius: 2px; background-color: ${color}; flex-shrink: 0;"></div>
+                            <span style="color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${channel}">${channel}</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; margin-left: 1rem;">
+                            <span style="color: #6b7280; font-weight: 500;">${value.toLocaleString()}${metric === 'customer' ? '명' : '건'}</span>
+                            <span style="color: #9ca3af; font-size: 0.8125rem;">(${percentage}%)</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('channel-list').innerHTML = channelListHtml || '<div style="padding: 1rem; text-align: center; color: #9ca3af;">데이터가 없습니다</div>';
+        }
+
+        function downloadHeatmapCSV() {
+            if (!timeslotData || !timeslotData.heatmap_data) {
+                alert('다운로드할 데이터가 없습니다.');
+                return;
+            }
+
+            const metric = document.querySelector('input[name="timeslot-metric"]:checked').value;
+            const metricKey = metric === 'customer' ? '고객수' : '유입수';
+            const metricLabel = metric === 'customer' ? '고객수' : '유입수';
+            const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
+
+            // 히트맵 데이터를 2차원 배열로 변환
+            const heatmapData = timeslotData.heatmap_data;
+
+            // 시간대별로 그룹화
+            const dataByHour = {};
+            heatmapData.forEach(item => {
+                const hour = item['시간'];
+                if (!dataByHour[hour]) {
+                    dataByHour[hour] = {};
+                }
+                dataByHour[hour][item['요일']] = item[metricKey] || 0;
+            });
+
+            // CSV 형식으로 변환
+            let csvContent = '시간대,' + weekdayOrder.join(',') + '\n';
+
+            // 0시부터 23시까지
+            for (let hour = 0; hour < 24; hour++) {
+                const row = [`${hour}시`];
+                weekdayOrder.forEach(weekday => {
+                    const value = dataByHour[hour]?.[weekday] || 0;
+                    row.push(value);
+                });
+                csvContent += row.join(',') + '\n';
+            }
+
+            // BOM 추가 (한글 깨짐 방지)
+            const BOM = '\uFEFF';
+            const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+            // 다운로드
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const filename = `히트맵_${metricLabel}_${timestamp}.csv`;
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // 성공 피드백
+            const button = event.target.closest('button');
+            const originalHTML = button.innerHTML;
+            button.innerHTML = '<i data-lucide="check" style="width: 16px; height: 16px;"></i>';
+            lucide.createIcons();
+
+            setTimeout(() => {
+                button.innerHTML = originalHTML;
+                lucide.createIcons();
+            }, 1500);
         }
 
         function clearHeatmapSelection() {

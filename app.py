@@ -573,20 +573,23 @@ def get_timeslot_data():
         df['요일_순서'] = df['요일'].apply(lambda x: weekday_order.index(x) if x in weekday_order else -1)
         df = df[df['요일_순서'] >= 0]
 
+        # NaN 값을 빈 문자열로 변환 (groupby에서 NaN이 제외되지 않도록)
+        df['채널상세'] = df['채널상세'].fillna('')
+
         # 히트맵용 데이터: 요일별/시간대별 집계
         heatmap_data = df.groupby(['요일', '요일_순서', '시간']).agg({
             '고객수': 'sum',
             '유입수': 'sum'
         }).reset_index().sort_values(['요일_순서', '시간'])
 
-        # 채널별 시간대 데이터
-        channel_hourly = df.groupby(['시간', '채널그룹']).agg({
+        # 채널별 시간대 데이터 (채널그룹, 채널명, 채널상세 포함)
+        channel_hourly = df.groupby(['시간', '채널그룹', '채널명', '채널상세']).agg({
             '고객수': 'sum',
             '유입수': 'sum'
         }).reset_index()
 
         # 요일/시간대/채널별 데이터 (세부 필터용)
-        channel_weekday_hourly = df.groupby(['요일', '요일_순서', '시간', '채널그룹']).agg({
+        channel_weekday_hourly = df.groupby(['요일', '요일_순서', '시간', '채널그룹', '채널명', '채널상세']).agg({
             '고객수': 'sum',
             '유입수': 'sum'
         }).reset_index().sort_values(['요일_순서', '시간'])
