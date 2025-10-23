@@ -668,7 +668,33 @@
                         ctx.fillStyle = intensity > 0.55 ? 'rgba(255,255,255,0.92)' : '#1f2937';
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText(value.toLocaleString(), x, y);
+                        
+                        // 단위에 따른 값 포맷팅
+                        let displayValue;
+                        if (dataset.metricSuffix === '%') {
+                            displayValue = value.toFixed(2) + '%';
+                        } else if (dataset.metricSuffix === '원') {
+                            displayValue = Math.round(value).toLocaleString() + '원';
+                        } else if (point.metricLabel) {
+                            // 통합지표/다중보기의 경우 metricLabel로 단위 결정
+                            if (point.metricLabel === '결제금액') {
+                                displayValue = Math.round(value).toLocaleString() + '원';
+                            } else if (point.metricLabel === '고객수' || point.metricLabel === '결제자수') {
+                                displayValue = Math.round(value).toLocaleString() + '명';
+                            } else if (point.metricLabel === '유입수') {
+                                displayValue = Math.round(value).toLocaleString() + '건';
+                            } else if (point.metricLabel === '전환률') {
+                                displayValue = value.toFixed(2) + '%';
+                            } else if (point.metricLabel === '객단가') {
+                                displayValue = Math.round(value).toLocaleString() + '원';
+                            } else {
+                                displayValue = Math.round(value).toLocaleString();
+                            }
+                        } else {
+                            displayValue = Math.round(value).toLocaleString() + (dataset.metricSuffix || '');
+                        }
+                        
+                        ctx.fillText(displayValue, x, y);
                         ctx.restore();
                     });
                 });
@@ -698,7 +724,18 @@
                     const x = xScale.getPixelForValue(label);
                     const total = dataset.columnTotals[idx] || 0;
                     const suffix = dataset.metricSuffix || '';
-                    ctx.fillText(`${total.toLocaleString()}${suffix}`, x, top - 4);
+                    
+                    // 단위에 따른 합계 포맷팅
+                    let displayTotal;
+                    if (suffix === '%') {
+                        displayTotal = total.toFixed(2) + '%';
+                    } else if (suffix === '원') {
+                        displayTotal = Math.round(total).toLocaleString() + '원';
+                    } else {
+                        displayTotal = Math.round(total).toLocaleString() + suffix;
+                    }
+                    
+                    ctx.fillText(displayTotal, x, top - 4);
                 });
                 ctx.restore();
             }
@@ -859,8 +896,42 @@
                                 <input type="radio" name="timeslot-metric" value="amount"> 결제금액
                             </label>
                             <label class="checkbox-label">
-                                <input type="radio" name="timeslot-metric" value="integrated"> 통합보기
+                                <input type="radio" name="timeslot-metric" value="conversion"> 전환률
                             </label>
+                            <label class="checkbox-label">
+                                <input type="radio" name="timeslot-metric" value="aov"> 객단가
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="radio" name="timeslot-metric" value="multi"> 다중보기
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- 다중보기 선택 시 나타날 다중 선택 UI -->
+                    <div id="multi-select-ui" style="display: none; margin-top: 1rem;">
+                        <div class="date-filter-title" style="margin-bottom: 0.5rem;">지표 선택 (최대 4개)</div>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="multi-metric" value="customer"> 고객수
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="multi-metric" value="inflow"> 유입수
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="multi-metric" value="payers"> 결제자수
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="multi-metric" value="amount"> 결제금액
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="multi-metric" value="conversion"> 전환률
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="multi-metric" value="aov"> 객단가
+                            </label>
+                        </div>
+                        <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">
+                            💡 최대 4개까지 선택할 수 있습니다.
                         </div>
                     </div>
                 </div>
@@ -968,6 +1039,26 @@
                     updateTimeslotCharts();
                 });
             });
+            
+            // 다중 선택 체크박스 이벤트
+            document.querySelectorAll('input[name="multi-metric"]').forEach(checkbox => {
+                checkbox.addEventListener('change', () => {
+                    const selectedMetrics = Array.from(document.querySelectorAll('input[name="multi-metric"]:checked')).map(cb => cb.value);
+                    
+                    // 최대 4개 제한
+                    if (selectedMetrics.length > 4) {
+                        checkbox.checked = false;
+                        alert('최대 4개까지만 선택할 수 있습니다.');
+                        return;
+                    }
+                    
+                    // 다중보기가 선택된 상태에서만 차트 업데이트
+                    const multiRadio = document.querySelector('input[name="timeslot-metric"][value="multi"]');
+                    if (multiRadio && multiRadio.checked) {
+                        updateTimeslotCharts();
+                    }
+                });
+            });
         }
 
         async function loadTimeslotData() {
@@ -997,9 +1088,11 @@
             const heatmapContainer = document.querySelector('#timeslot-content > div.row > div.col-md-7') 
                                    || document.querySelector('#timeslot-content > div.row > div.col-md-12');
             
-            // 통합보기 선택 시 우측 차트 숨기고 히트맵 확장
-            if (metric === 'integrated') {
-                document.getElementById('heatmap-title').textContent = '요일/시간대별 통합 히트맵 (4지표)';
+            // 다중보기 선택 시 UI 표시/숨김 처리
+            const multiSelectUI = document.getElementById('multi-select-ui');
+            if (metric === 'multi') {
+                if (multiSelectUI) multiSelectUI.style.display = 'block';
+                document.getElementById('heatmap-title').textContent = '요일/시간대별 다중 지표 히트맵';
                 
                 // 우측 차트 숨기기
                 if (channelChartContainer) channelChartContainer.style.display = 'none';
@@ -1010,21 +1103,51 @@
                     heatmapContainer.classList.add('col-md-12');
                 }
             } else {
+                if (multiSelectUI) multiSelectUI.style.display = 'none';
                 // 히트맵 제목 업데이트
                 const metricTitles = {
                     'customer': '고객수',
                     'inflow': '유입수',
                     'payers': '결제자수',
-                    'amount': '결제금액'
+                    'amount': '결제금액',
+                    'conversion': '전환률',
+                    'aov': '객단가'
                 };
                 const metricTitle = metricTitles[metric] || '고객수';
                 document.getElementById('heatmap-title').textContent = `요일/시간대별 ${metricTitle} 히트맵`;
                 
                 // 채널 차트 제목 업데이트
-                if (metric === 'payers' || metric === 'amount') {
+                if (metric === 'payers' || metric === 'amount' || metric === 'conversion' || metric === 'aov') {
                     document.getElementById('channel-chart-title').textContent = '구매 데이터 분석';
                 } else {
                     document.getElementById('channel-chart-title').textContent = '채널별 유입 구성';
+                }
+                
+                // 전환률 또는 객단가 선택 시 특별 처리
+                if (metric === 'conversion' || metric === 'aov') {
+                    // 결제 지표 메시지 표시
+                    document.getElementById('payment-metric-message').style.display = 'block';
+                    document.getElementById('channel-chart-content').style.display = 'none';
+                    
+                    // 전환률 계산 및 표시
+                    if (metric === 'conversion') {
+                        const totalCustomers = timeslotData.total_stats.customer || 0;
+                        const totalPayers = timeslotData.total_stats.payers || 0;
+                        const conversionRate = totalCustomers > 0 ? (totalPayers / totalCustomers * 100).toFixed(2) : 0;
+                        document.getElementById('conversion-rate').textContent = `${conversionRate}%`;
+                    }
+                    
+                    // 객단가 계산 및 표시
+                    if (metric === 'aov') {
+                        const totalAmount = timeslotData.total_stats.amount || 0;
+                        const totalPayers = timeslotData.total_stats.payers || 0;
+                        const aov = totalPayers > 0 ? Math.round(totalAmount / totalPayers) : 0;
+                        document.getElementById('average-order-value').textContent = `${aov.toLocaleString()}원`;
+                    }
+                } else {
+                    // 일반 지표 선택 시
+                    document.getElementById('payment-metric-message').style.display = 'none';
+                    document.getElementById('channel-chart-content').style.display = 'block';
                 }
                 
                 // 우측 차트 보이기
@@ -1042,9 +1165,9 @@
         }
 
         function updateHeatmapChart(metric) {
-            // 통합보기 처리
-            if (metric === 'integrated') {
-                renderIntegratedHeatmap();
+            // 다중보기 처리
+            if (metric === 'multi') {
+                renderMultiMetricHeatmap();
                 return;
             }
             
@@ -1052,7 +1175,9 @@
                 'customer': '고객수',
                 'inflow': '유입수',
                 'payers': '결제자수',
-                'amount': '결제금액'
+                'amount': '결제금액',
+                'conversion': '전환률',
+                'aov': '객단가'
             };
             const metricKey = metricMap[metric] || '고객수';
             const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
@@ -1065,23 +1190,70 @@
             // 히트맵 데이터 변환 - X축: 요일, Y축: 시간대
             const heatmapPoints = [];
             const totalsByWeekday = new Map();
+            const countsByWeekday = new Map(); // 전환률/객단가 평균 계산용
+            
             timeslotData.heatmap_data.forEach(item => {
                 const hour = item['시간'];
                 const hourLabel = timeSlotLabels[hour] || `${hour.toString().padStart(2, '0')}-${(hour + 1).toString().padStart(2, '0')}`;
+                
+                let value = 0;
+                if (metric === 'conversion') {
+                    // 전환률 계산: 결제자수 / 고객수 * 100
+                    const customers = item['고객수'] || 0;
+                    const payers = item['결제자수'] || 0;
+                    value = customers > 0 ? (payers / customers * 100) : 0;
+                } else if (metric === 'aov') {
+                    // 객단가 계산: 결제금액 / 결제자수
+                    const amount = item['결제금액'] || 0;
+                    const payers = item['결제자수'] || 0;
+                    value = payers > 0 ? (amount / payers) : 0;
+                } else {
+                    value = item[metricKey] || 0;
+                }
+                
                 heatmapPoints.push({
                     x: item['요일'],                        // X축: 요일 라벨
                     y: hourLabel,                           // Y축: 시간대 라벨
-                    v: item[metricKey] || 0,               // 값
+                    v: value,                               // 계산된 값
                     weekday: item['요일'],
                     hour,
                     hourLabel
                 });
                 const weekday = item['요일'];
-                const value = item[metricKey] || 0;
-                totalsByWeekday.set(weekday, (totalsByWeekday.get(weekday) || 0) + value);
+                
+                if (metric === 'conversion' || metric === 'aov') {
+                    // 전환률/객단가는 평균 계산
+                    const currentTotal = totalsByWeekday.get(weekday) || 0;
+                    const currentCount = countsByWeekday.get(weekday) || 0;
+                    totalsByWeekday.set(weekday, currentTotal + value);
+                    countsByWeekday.set(weekday, currentCount + 1);
+                } else {
+                    // 일반 지표는 합계 계산
+                    totalsByWeekday.set(weekday, (totalsByWeekday.get(weekday) || 0) + value);
+                }
             });
-            const columnTotals = weekdayOrder.map(day => totalsByWeekday.get(day) || 0);
-            const metricSuffix = '';  // 요일별 합계에 단위 제거
+            
+            // 요일별 합계/평균 계산
+            const columnTotals = weekdayOrder.map(day => {
+                if (metric === 'conversion' || metric === 'aov') {
+                    const total = totalsByWeekday.get(day) || 0;
+                    const count = countsByWeekday.get(day) || 0;
+                    return count > 0 ? total / count : 0;
+                } else {
+                    return totalsByWeekday.get(day) || 0;
+                }
+            });
+            
+            // 단위 정의
+            const unitMap = {
+                'customer': '명',
+                'inflow': '건', 
+                'payers': '명',
+                'amount': '원',
+                'conversion': '%',
+                'aov': '원'
+            };
+            const metricSuffix = unitMap[metric] || '';
 
             // 최대값 계산 (색상 스케일용)
             const maxValue = heatmapPoints.length ? Math.max(...heatmapPoints.map(p => p.v)) : 0;
@@ -1105,6 +1277,12 @@
                     const r = Math.round(ramp(220, 74, 21));
                     const g = Math.round(ramp(252, 222, 128));
                     const b = Math.round(ramp(231, 145, 61));
+                    return `rgba(${r}, ${g}, ${b}, 0.92)`;
+                } else if (metric === 'conversion' || metric === 'aov') {
+                    // 전환률/객단가: #FFC0CB 기준 연한 핑크 계열
+                    const r = Math.round(ramp(255, 255, 255));
+                    const g = Math.round(ramp(192, 192, 192));
+                    const b = Math.round(ramp(203, 203, 203));
                     return `rgba(${r}, ${g}, ${b}, 0.92)`;
                 } else {
                     // 고객수/유입수: 파란색 계열 (연한 하늘색 -> 중간 파랑 -> 진한 파랑)
@@ -1190,7 +1368,26 @@
                                 },
                                 label(context) {
                                     const v = context.dataset.data[context.dataIndex];
-                                    return `${v.weekday} ${v.hourLabel}: ${v.v.toLocaleString()}${metric === 'customer' ? '명' : '건'}`;
+                                    const unitMap = {
+                                        'customer': '명',
+                                        'inflow': '건', 
+                                        'payers': '명',
+                                        'amount': '원',
+                                        'conversion': '%',
+                                        'aov': '원'
+                                    };
+                                    const unit = unitMap[metric] || '';
+                                    
+                                    let displayValue;
+                                    if (unit === '%') {
+                                        displayValue = v.v.toFixed(2) + '%';
+                                    } else if (unit === '원') {
+                                        displayValue = Math.round(v.v).toLocaleString() + '원';
+                                    } else {
+                                        displayValue = Math.round(v.v).toLocaleString() + unit;
+                                    }
+                                    
+                                    return `${v.weekday} ${v.hourLabel}: ${displayValue}`;
                                 }
                             }
                         }
@@ -1240,7 +1437,7 @@
             const paymentMessage = document.getElementById('payment-metric-message');
             const channelChartContent = document.getElementById('channel-chart-content');
             
-            if (metric === 'payers' || metric === 'amount') {
+            if (metric === 'payers' || metric === 'amount' || metric === 'conversion' || metric === 'aov') {
                 if (paymentMessage) {
                     paymentMessage.style.display = 'block';
                     // 전환율과 객단가 계산
@@ -1454,8 +1651,75 @@
             const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
             let csvContent, filename;
 
+            // 다중보기일 때
+            if (metric === 'multi') {
+                const selectedMetrics = Array.from(document.querySelectorAll('input[name="multi-metric"]:checked')).map(cb => cb.value);
+                
+                if (selectedMetrics.length === 0) {
+                    alert('다운로드할 지표를 선택해주세요.');
+                    return;
+                }
+                
+                const metricMap = {
+                    'customer': '고객수',
+                    'inflow': '유입수',
+                    'payers': '결제자수',
+                    'amount': '결제금액',
+                    'conversion': '전환률',
+                    'aov': '객단가'
+                };
+                
+                const metrics = selectedMetrics.map(m => metricMap[m]).filter(Boolean);
+                
+                // 헤더 생성: 시간대, 일_고객수, 일_유입수, 일_결제자수, 일_결제금액, 월_고객수, ...
+                const headers = ['시간대'];
+                weekdayOrder.forEach(day => {
+                    metrics.forEach(m => {
+                        headers.push(`${day}_${m}`);
+                    });
+                });
+                csvContent = headers.join(',') + '\n';
+
+                // 시간대별로 데이터 그룹화
+                const dataByHour = {};
+                heatmapData.forEach(item => {
+                    const hour = item['시간'];
+                    if (!dataByHour[hour]) {
+                        dataByHour[hour] = {};
+                    }
+                    dataByHour[hour][item['요일']] = item;
+                });
+
+                // 각 시간대별 데이터 생성
+                for (let hour = 0; hour < 24; hour++) {
+                    const row = [`${hour}시`];
+                    weekdayOrder.forEach(weekday => {
+                        const item = dataByHour[hour]?.[weekday];
+                        metrics.forEach(metricKey => {
+                            let value = 0;
+                            if (metricKey === '전환률') {
+                                // 전환률 계산
+                                const customers = item ? (item['고객수'] || 0) : 0;
+                                const payers = item ? (item['결제자수'] || 0) : 0;
+                                value = customers > 0 ? (payers / customers * 100) : 0;
+                            } else if (metricKey === '객단가') {
+                                // 객단가 계산
+                                const amount = item ? (item['결제금액'] || 0) : 0;
+                                const payers = item ? (item['결제자수'] || 0) : 0;
+                                value = payers > 0 ? (amount / payers) : 0;
+                            } else {
+                                value = item ? (item[metricKey] || 0) : 0;
+                            }
+                            row.push(value);
+                        });
+                    });
+                    csvContent += row.join(',') + '\n';
+                }
+                
+                filename = `히트맵_다중보기_${selectedMetrics.join('_')}_${timestamp}.csv`;
+            }
             // 통합보기일 때
-            if (metric === 'integrated') {
+            else if (metric === 'integrated') {
                 const metrics = ['고객수', '유입수', '결제자수', '결제금액'];
                 
                 // 헤더 생성: 시간대, 일_고객수, 일_유입수, 일_결제자수, 일_결제금액, 월_고객수, ...
@@ -1498,7 +1762,9 @@
                     'customer': '고객수',
                     'inflow': '유입수',
                     'payers': '결제자수',
-                    'amount': '결제금액'
+                    'amount': '결제금액',
+                    'conversion': '전환률',
+                    'aov': '객단가'
                 };
                 const metricKey = metricMap[metric] || '고객수';
                 const metricLabel = metricKey;
@@ -1510,7 +1776,7 @@
                     if (!dataByHour[hour]) {
                         dataByHour[hour] = {};
                     }
-                    dataByHour[hour][item['요일']] = item[metricKey] || 0;
+                    dataByHour[hour][item['요일']] = item;
                 });
 
                 // CSV 형식으로 변환
@@ -1520,7 +1786,23 @@
                 for (let hour = 0; hour < 24; hour++) {
                     const row = [`${hour}시`];
                     weekdayOrder.forEach(weekday => {
-                        const value = dataByHour[hour]?.[weekday] || 0;
+                        const item = dataByHour[hour]?.[weekday];
+                        let value = 0;
+                        
+                        if (metric === 'conversion') {
+                            // 전환률 계산
+                            const customers = item ? (item['고객수'] || 0) : 0;
+                            const payers = item ? (item['결제자수'] || 0) : 0;
+                            value = customers > 0 ? (payers / customers * 100) : 0;
+                        } else if (metric === 'aov') {
+                            // 객단가 계산
+                            const amount = item ? (item['결제금액'] || 0) : 0;
+                            const payers = item ? (item['결제자수'] || 0) : 0;
+                            value = payers > 0 ? (amount / payers) : 0;
+                        } else {
+                            value = item ? (item[metricKey] || 0) : 0;
+                        }
+                        
                         row.push(value);
                     });
                     csvContent += row.join(',') + '\n';
@@ -1554,6 +1836,245 @@
                 button.innerHTML = originalHTML;
                 lucide.createIcons();
             }, 1500);
+        }
+
+        function renderMultiMetricHeatmap() {
+            const selectedMetrics = Array.from(document.querySelectorAll('input[name="multi-metric"]:checked')).map(cb => cb.value);
+            
+            if (selectedMetrics.length === 0) {
+                // 선택된 지표가 없으면 빈 히트맵 표시
+                if (timeslotHeatmapChart) {
+                    timeslotHeatmapChart.destroy();
+                }
+                return;
+            }
+            
+            const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
+            const timeSlotLabels = Array.from({ length: 24 }, (_, hour) => {
+                const nextHour = hour + 1;
+                return `${hour.toString().padStart(2, '0')}-${nextHour.toString().padStart(2, '0')}`;
+            });
+            const timeSlotAxisLabels = [...timeSlotLabels].reverse();
+            
+            // 선택된 지표 정의
+            const metricMap = {
+                'customer': { key: '고객수', label: '고', color: 'customer' },
+                'inflow': { key: '유입수', label: '유', color: 'inflow' },
+                'payers': { key: '결제자수', label: '결', color: 'payer' },
+                'amount': { key: '결제금액', label: '금', color: 'amount' },
+                'conversion': { key: '전환률', label: '전', color: 'conversion' },
+                'aov': { key: '객단가', label: '객', color: 'aov' }
+            };
+            
+            const metrics = selectedMetrics.map(metric => metricMap[metric]).filter(Boolean);
+            
+            // X축 레이블 생성 (요일 x 선택된 지표)
+            const multiXLabels = [];
+            weekdayOrder.forEach(day => {
+                metrics.forEach(m => {
+                    multiXLabels.push(`${day}\n${m.label}`);
+                });
+            });
+            
+            // 히트맵 데이터 변환
+            const heatmapPoints = [];
+            const dataByWeekdayHour = new Map();
+            
+            timeslotData.heatmap_data.forEach(item => {
+                const key = `${item['요일']}_${item['시간']}`;
+                dataByWeekdayHour.set(key, item);
+            });
+            
+            // 각 시간대별로 요일 x 지표 조합 생성
+            for (let hour = 0; hour < 24; hour++) {
+                const hourLabel = timeSlotLabels[hour];
+                
+                weekdayOrder.forEach(weekday => {
+                    const key = `${weekday}_${hour}`;
+                    const item = dataByWeekdayHour.get(key);
+                    
+                    metrics.forEach(metric => {
+                        let value = 0;
+                        if (metric.color === 'conversion') {
+                            // 전환률 계산
+                            const customers = item ? (item['고객수'] || 0) : 0;
+                            const payers = item ? (item['결제자수'] || 0) : 0;
+                            value = customers > 0 ? (payers / customers * 100) : 0;
+                        } else if (metric.color === 'aov') {
+                            // 객단가 계산
+                            const amount = item ? (item['결제금액'] || 0) : 0;
+                            const payers = item ? (item['결제자수'] || 0) : 0;
+                            value = payers > 0 ? (amount / payers) : 0;
+                        } else {
+                            value = item ? (item[metric.key] || 0) : 0;
+                        }
+                        
+                        heatmapPoints.push({
+                            x: `${weekday}\n${metric.label}`,
+                            y: hourLabel,
+                            v: value,
+                            weekday,
+                            hour,
+                            hourLabel,
+                            metricLabel: metric.key,
+                            metricColor: metric.color
+                        });
+                    });
+                });
+            }
+            
+            // 각 지표별 최대값 계산
+            const maxValues = {};
+            metrics.forEach(metric => {
+                const values = heatmapPoints
+                    .filter(p => p.metricLabel === metric.key)
+                    .map(p => p.v);
+                maxValues[metric.key] = Math.max(...values, 1);
+            });
+            
+            // 색상 함수
+            const getMultiColor = (point) => {
+                const value = point.v;
+                const maxValue = maxValues[point.metricLabel];
+                
+                if (!maxValue || value <= 0) {
+                    return 'rgba(226, 232, 240, 0.6)';
+                }
+                
+                const normalized = Math.pow(value / maxValue, 0.6);
+                const ramp = (start, mid, end) => {
+                    if (normalized < 0.5) {
+                        const t = normalized * 2;
+                        return start + (mid - start) * t;
+                    }
+                    const t = (normalized - 0.5) * 2;
+                    return mid + (end - mid) * t;
+                };
+                
+                // 지표별 색상
+                if (point.metricColor === 'payer' || point.metricColor === 'amount') {
+                    // 결제 관련: 녹색 계열
+                    const r = Math.round(ramp(220, 74, 21));
+                    const g = Math.round(ramp(252, 222, 128));
+                    const b = Math.round(ramp(231, 145, 61));
+                    return `rgba(${r}, ${g}, ${b}, 0.92)`;
+                } else if (point.metricColor === 'conversion' || point.metricColor === 'aov') {
+                    // 전환률/객단가: 핑크 계열
+                    const r = Math.round(ramp(255, 255, 255));
+                    const g = Math.round(ramp(192, 192, 192));
+                    const b = Math.round(ramp(203, 203, 203));
+                    return `rgba(${r}, ${g}, ${b}, 0.92)`;
+                } else {
+                    // 고객/유입: 파란색 계열
+                    const r = Math.round(ramp(219, 96, 29));
+                    const g = Math.round(ramp(234, 165, 78));
+                    const b = Math.round(ramp(254, 250, 216));
+                    return `rgba(${r}, ${g}, ${b}, 0.92)`;
+                }
+            };
+            
+            if (timeslotHeatmapChart) {
+                timeslotHeatmapChart.destroy();
+            }
+            
+            const ctx = document.getElementById('timeslot-heatmap').getContext('2d');
+            const weekdayCount = multiXLabels.length || 1;
+            const timeSlotCount = timeSlotLabels.length || 1;
+            
+            timeslotHeatmapChart = new Chart(ctx, {
+                type: 'matrix',
+                data: {
+                    datasets: [{
+                        label: '다중 지표',
+                        data: heatmapPoints,
+                        backgroundColor(context) {
+                            const point = context.dataset.data[context.dataIndex];
+                            return getMultiColor(point);
+                        },
+                        borderWidth: 1,
+                        borderColor: '#e5e7eb',
+                        width: ({ chart }) => (chart.chartArea ? chart.chartArea.width / weekdayCount - 1 : 0),
+                        height: ({ chart }) => (chart.chartArea ? chart.chartArea.height / timeSlotCount - 1 : 0),
+                        maxValue: Math.max(...heatmapPoints.map(p => p.v)),
+                        animations: {
+                            numbers: { duration: 0 },
+                            colors: { duration: 0 }
+                        }
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            top: 36,
+                            right: 16,
+                            bottom: 16,
+                            left: 16
+                        }
+                    },
+                    animation: false,
+                    transitions: {
+                        active: { animation: { duration: 0 } },
+                        show: { animation: { duration: 0 } },
+                        hide: { animation: { duration: 0 } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title() { return ''; },
+                                label(context) {
+                                    const v = context.dataset.data[context.dataIndex];
+                                    const unitMap = {
+                                        '고객수': '명',
+                                        '유입수': '건',
+                                        '결제자수': '명',
+                                        '결제금액': '원',
+                                        '전환률': '%',
+                                        '객단가': '원'
+                                    };
+                                    const unit = unitMap[v.metricLabel] || '';
+                                    
+                                    let displayValue;
+                                    if (unit === '%') {
+                                        displayValue = v.v.toFixed(2) + '%';
+                                    } else if (unit === '원') {
+                                        displayValue = Math.round(v.v).toLocaleString() + '원';
+                                    } else {
+                                        displayValue = Math.round(v.v).toLocaleString() + unit;
+                                    }
+                                    
+                                    return `${v.weekday} ${v.hourLabel} (${v.metricLabel}): ${displayValue}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'category',
+                            labels: multiXLabels,
+                            position: 'bottom',
+                            offset: true,
+                            grid: { display: false },
+                            ticks: {
+                                maxRotation: 0,
+                                font: { size: 10 }
+                            }
+                        },
+                        y: {
+                            type: 'category',
+                            labels: timeSlotAxisLabels,
+                            position: 'left',
+                            offset: true,
+                            grid: { display: false },
+                            ticks: {
+                                font: { size: 10 }
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         function renderIntegratedHeatmap() {
@@ -1721,14 +2242,17 @@
                                 label(context) {
                                     const point = context.raw;
                                     const value = point.v;
-                                    let formattedValue = value.toLocaleString();
                                     
+                                    // 단위에 따른 값 포맷팅
+                                    let formattedValue;
                                     if (point.metricLabel === '결제금액') {
-                                        formattedValue += '원';
+                                        formattedValue = Math.round(value).toLocaleString() + '원';
                                     } else if (point.metricLabel === '고객수' || point.metricLabel === '결제자수') {
-                                        formattedValue += '명';
+                                        formattedValue = Math.round(value).toLocaleString() + '명';
                                     } else if (point.metricLabel === '유입수') {
-                                        formattedValue += '건';
+                                        formattedValue = Math.round(value).toLocaleString() + '건';
+                                    } else {
+                                        formattedValue = Math.round(value).toLocaleString();
                                     }
                                     
                                     return `${point.metricLabel}: ${formattedValue}`;
