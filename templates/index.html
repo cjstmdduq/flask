@@ -10,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.0/dist/chartjs-plugin-zoom.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.3.0/dist/chartjs-chart-matrix.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
@@ -560,6 +561,9 @@
                     <li class="sidebar-menu-item" data-menu="timeslot-analysis">
                         시간대별 유입&결제 분석
                     </li>
+                    <li class="sidebar-menu-item" data-menu="product-performance">
+                        상품성과분석
+                    </li>
                 </ul>
             </aside>
 
@@ -601,6 +605,11 @@
                     <!-- 시간대별 유입 분석 섹션 -->
                     <div id="timeslot-analysis-section" style="display: none;">
                         <div id="timeslot-content"></div>
+                    </div>
+
+                    <!-- 상품성과분석 섹션 -->
+                    <div id="product-performance-section" style="display: none;">
+                        <div id="product-performance-content"></div>
                     </div>
                 </div>
             </div>
@@ -797,13 +806,24 @@
                     if (menu === 'sales-analysis') {
                         document.getElementById('sales-analysis-section').style.display = 'block';
                         document.getElementById('timeslot-analysis-section').style.display = 'none';
+                        document.getElementById('product-performance-section').style.display = 'none';
                     } else if (menu === 'timeslot-analysis') {
                         document.getElementById('sales-analysis-section').style.display = 'none';
                         document.getElementById('timeslot-analysis-section').style.display = 'block';
+                        document.getElementById('product-performance-section').style.display = 'none';
 
                         // 타임슬롯 대시보드 초기화 (최초 1회만)
                         if (!document.getElementById('timeslot-content').innerHTML) {
                             initializeTimeslotDashboard();
+                        }
+                    } else if (menu === 'product-performance') {
+                        document.getElementById('sales-analysis-section').style.display = 'none';
+                        document.getElementById('timeslot-analysis-section').style.display = 'none';
+                        document.getElementById('product-performance-section').style.display = 'block';
+
+                        // 상품성과분석 대시보드 초기화 (최초 1회만)
+                        if (!document.getElementById('product-performance-content').innerHTML) {
+                            initializeProductPerformanceDashboard();
                         }
                     }
                 });
@@ -2839,6 +2859,8 @@
                 loadSettleData();
             } else if (prefix === 'timeslot') {
                 loadTimeslotData();
+            } else if (prefix === 'product') {
+                loadProductPerformanceData();
             }
 
             // 아이콘 재초기화
@@ -3740,6 +3762,679 @@
                 console.error('전년도 데이터 로드 오류:', error);
                 return null;
             }
+        }
+
+        // ========== 상품성과분석 대시보드 ==========
+        let productPerformanceChart = null;
+        let productDistributionChart = null;
+        let productPerformanceData = null;
+        let productColorMap = {}; // 제품ID별 색상 맵
+
+        function initializeProductPerformanceDashboard() {
+            document.getElementById('product-performance-content').innerHTML = getProductPerformanceHTML();
+            setupProductPerformanceListeners();
+
+            // 초기 날짜를 14일로 설정
+            setDateRange('product', 14);
+
+            // lucide 아이콘 초기화
+            lucide.createIcons();
+
+            loadProductPerformanceData();
+        }
+
+        function getProductPerformanceHTML() {
+            return `
+                <!-- 날짜 필터 -->
+                <div class="date-filter-section" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                        <button class="date-preset-btn" data-type="product" data-days="7">최근 7일</button>
+                        <button class="date-preset-btn active" data-type="product" data-days="14">최근 14일</button>
+                        <button class="date-preset-btn" data-type="product" data-days="30">최근 30일</button>
+                        <button class="date-preset-btn" data-type="product" data-days="90">최근 90일</button>
+                        <button class="date-preset-btn" data-type="product" data-preset="this-month">이번 달</button>
+                        <button class="date-preset-btn" data-type="product" data-preset="last-month">지난 달</button>
+                        <div style="width: 1px; height: 24px; background: #e5e7eb; margin: 0 0.5rem;"></div>
+                        <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('product', -1)" title="이전">
+                            <i data-lucide="chevron-left"></i>
+                        </button>
+                        <input type="date" class="form-control product-date-input" id="product-startDate" style="width: auto; font-size: 0.875rem;">
+                        <span style="color: #9ca3af;">~</span>
+                        <input type="date" class="form-control product-date-input" id="product-endDate" style="width: auto; font-size: 0.875rem;">
+                        <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('product', 1)" title="다음">
+                            <i data-lucide="chevron-right"></i>
+                        </button>
+                    </div>
+                    <div style="margin-top: 0.75rem; display: flex; gap: 1rem; align-items: center;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <label style="font-size: 0.875rem; color: #6b7280; margin: 0;">상품 필터:</label>
+                            <input type="text" class="form-control" id="product-filter-input" placeholder="상품명 또는 상품ID로 검색" style="width: 300px; font-size: 0.875rem;">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearProductFilter()" style="font-size: 0.875rem;">초기화</button>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="checkbox" id="product-top-only" style="cursor: pointer;">
+                            <label for="product-top-only" style="font-size: 0.875rem; color: #374151; margin: 0; cursor: pointer;">주요상품만 보기 (상위 5개)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 통계 카드 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-card-header">총 결제금액</div>
+                            <div class="metric-card-value" id="product-total-payment">₩0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-card-header">총 환불금액</div>
+                            <div class="metric-card-value" id="product-total-refund">₩0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-card-header">순매출</div>
+                            <div class="metric-card-value" id="product-net-sales">₩0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-card-header">환불률</div>
+                            <div class="metric-card-value" id="product-refund-rate">0%</div>
+                            <div class="metric-card-sub" id="product-count">총 0개 상품</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 차트 영역 -->
+                <div class="row">
+                    <!-- 좌측: 날짜별 제품별 누적 막대그래프 + 총합 라인 -->
+                    <div class="col-md-7">
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <div class="chart-title" id="product-performance-chart-title">날짜별 제품별 순매출 추이</div>
+                            </div>
+                            <div style="position: relative; height: 450px; width: 100%;">
+                                <canvas id="product-performance-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 우측: 상품별 순매출 비율 (도넛차트) -->
+                    <div class="col-md-5">
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <div class="chart-title" id="product-distribution-chart-title">상품별 순매출 구성</div>
+                            </div>
+                            <div style="position: relative; height: 300px; margin-bottom: 1.5rem;">
+                                <canvas id="product-distribution-chart"></canvas>
+                            </div>
+                            <!-- 상품 목록 -->
+                            <div id="product-list">
+                                <!-- 동적으로 생성됨 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 상품 목록 테이블 -->
+                <div class="chart-container mt-4">
+                    <div class="chart-header">
+                        <div class="chart-title">상품별 상세 데이터</div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="table table-sm" style="font-size: 0.875rem;">
+                            <thead style="background: #f9fafb;">
+                                <tr>
+                                    <th>순위</th>
+                                    <th>상품명</th>
+                                    <th>상품ID</th>
+                                    <th style="text-align: right;">결제금액</th>
+                                    <th style="text-align: right;">환불금액</th>
+                                    <th style="text-align: right;">순매출</th>
+                                    <th style="text-align: right;">비율</th>
+                                </tr>
+                            </thead>
+                            <tbody id="product-table-body">
+                                <tr><td colspan="7" style="text-align: center; padding: 2rem;">데이터를 불러오는 중...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setupProductPerformanceListeners() {
+            // 날짜 프리셋 버튼
+            document.querySelectorAll('.date-preset-btn[data-type="product"]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const days = this.dataset.days;
+                    const preset = this.dataset.preset;
+
+                    if (days) {
+                        setDateRange('product', parseInt(days));
+                    } else if (preset === 'this-month') {
+                        setThisMonth('product');
+                    } else if (preset === 'last-month') {
+                        setLastMonth('product');
+                    }
+
+                    loadProductPerformanceData();
+                });
+            });
+
+            // 날짜 입력 필드 자동 적용
+            document.getElementById('product-startDate').addEventListener('change', function() {
+                loadProductPerformanceData();
+            });
+            document.getElementById('product-endDate').addEventListener('change', function() {
+                loadProductPerformanceData();
+            });
+
+            // 상품 필터 입력 (엔터키 & 실시간)
+            let productFilterTimeout;
+            document.getElementById('product-filter-input').addEventListener('input', function() {
+                clearTimeout(productFilterTimeout);
+                productFilterTimeout = setTimeout(() => {
+                    loadProductPerformanceData();
+                }, 500); // 500ms 대기 후 자동 적용
+            });
+
+            // 주요상품만 보기 체크박스
+            document.getElementById('product-top-only').addEventListener('change', function() {
+                updateProductPerformanceUI();
+            });
+        }
+
+        function clearProductFilter() {
+            document.getElementById('product-filter-input').value = '';
+            loadProductPerformanceData();
+        }
+
+        async function loadProductPerformanceData() {
+            try {
+                const startDate = document.getElementById('product-startDate').value;
+                const endDate = document.getElementById('product-endDate').value;
+                const productFilter = document.getElementById('product-filter-input').value.trim();
+
+                console.log('[상품성과] 데이터 로드 시작:', { startDate, endDate, productFilter });
+
+                let url = `/api/product_performance?start_date=${startDate}&end_date=${endDate}`;
+                if (productFilter) {
+                    url += `&product=${encodeURIComponent(productFilter)}`;
+                }
+
+                const response = await fetch(url);
+                const result = await response.json();
+
+                if (result.success) {
+                    console.log('[상품성과] 데이터 로드 성공:', result.data);
+                    productPerformanceData = result.data;
+                    updateProductPerformanceUI();
+                } else {
+                    console.error('상품성과 데이터 로드 실패:', result.message);
+                    alert('데이터 로드 실패: ' + result.message);
+                }
+            } catch (error) {
+                console.error('상품성과 데이터 로드 오류:', error);
+                alert('데이터 로드 중 오류가 발생했습니다.');
+            }
+        }
+
+        // 제품ID별 색상 맵 생성 함수
+        function generateProductColorMap(allProducts) {
+            const baseColors = [
+                'rgba(59, 130, 246, 0.85)',    // 밝은 파랑
+                'rgba(16, 185, 129, 0.85)',    // 에메랄드
+                'rgba(251, 146, 60, 0.85)',    // 주황
+                'rgba(168, 85, 247, 0.85)',    // 보라
+                'rgba(236, 72, 153, 0.85)',    // 핑크
+                'rgba(245, 158, 11, 0.85)',    // 황금색
+                'rgba(14, 165, 233, 0.85)',    // 하늘색
+                'rgba(239, 68, 68, 0.85)',     // 빨강
+                'rgba(132, 204, 22, 0.85)',    // 라임
+                'rgba(20, 184, 166, 0.85)',    // 청록색
+                'rgba(99, 102, 241, 0.85)',    // 인디고
+                'rgba(244, 114, 182, 0.85)',   // 연분홍
+                'rgba(52, 211, 153, 0.85)',    // 민트
+                'rgba(251, 191, 36, 0.85)',    // 노란색
+                'rgba(124, 58, 237, 0.85)',    // 진보라
+                'rgba(239, 154, 154, 0.85)',   // 연빨강
+                'rgba(79, 70, 229, 0.85)',     // 남색
+                'rgba(34, 197, 94, 0.85)',     // 초록
+                'rgba(249, 115, 22, 0.85)',    // 진주황
+                'rgba(217, 70, 239, 0.85)'     // 마젠타
+            ];
+
+            const colorMap = {};
+            allProducts.forEach((product, index) => {
+                const productId = product.상품ID;
+                if (index < baseColors.length) {
+                    colorMap[productId] = baseColors[index];
+                } else {
+                    // 기본 색상 이후에는 제품ID 기반 해시로 동적 생성
+                    const hue = ((index - baseColors.length) * 137.5) % 360;
+                    const saturation = 65 + (index % 4) * 8;
+                    const lightness = 50 + (index % 3) * 5;
+                    colorMap[productId] = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.85)`;
+                }
+            });
+            return colorMap;
+        }
+
+        function updateProductPerformanceUI() {
+            if (!productPerformanceData) return;
+
+            // 원본 데이터를 유지하기 위해 변수명을 명확히 구분
+            const originalData = productPerformanceData;
+            let total_stats = originalData.total_stats;
+            let daily_summary = originalData.daily_summary;
+            let product_summary = originalData.product_summary;
+            let daily_product_summary = originalData.daily_product_summary;
+
+            // 전체 제품 기반으로 색상 맵 생성 (최초 1회 또는 데이터 변경 시)
+            if (Object.keys(productColorMap).length === 0 || Object.keys(productColorMap).length !== originalData.product_summary.length) {
+                productColorMap = generateProductColorMap(originalData.product_summary);
+                console.log('[색상 맵] 생성 완료:', Object.keys(productColorMap).length, '개 제품');
+            }
+
+            // 주요상품만 보기 체크 여부 확인
+            const topOnlyChecked = document.getElementById('product-top-only') &&
+                                   document.getElementById('product-top-only').checked;
+
+            if (topOnlyChecked && product_summary && product_summary.length > 0) {
+                // 상위 5개 상품만 필터링 (새 배열 생성)
+                const top5ProductIds = product_summary.slice(0, 5).map(p => p.상품ID);
+
+                // product_summary 필터링 (새 배열)
+                product_summary = product_summary.filter(p => top5ProductIds.includes(p.상품ID));
+
+                // daily_product_summary 필터링 (새 배열)
+                if (daily_product_summary) {
+                    daily_product_summary = daily_product_summary.filter(item =>
+                        top5ProductIds.includes(item.product_id)
+                    );
+                }
+
+                // 통계 재계산 (새 객체)
+                const filteredPayment = product_summary.reduce((sum, p) => sum + (p.결제금액 || 0), 0);
+                const filteredRefund = product_summary.reduce((sum, p) => sum + (p.환불금액 || 0), 0);
+                const filteredNetSales = product_summary.reduce((sum, p) => sum + (p.순매출 || 0), 0);
+
+                total_stats = {
+                    total_payment: filteredPayment,
+                    total_refund: filteredRefund,
+                    total_net_sales: filteredNetSales,
+                    refund_rate: filteredPayment > 0 ? (filteredRefund / filteredPayment * 100) : 0,
+                    product_count: product_summary.length
+                };
+
+                console.log('[주요상품 필터] Top 5 상품:', product_summary.map(p => p.상품명));
+            }
+
+            // 통계 카드 업데이트
+            document.getElementById('product-total-payment').textContent =
+                '₩' + (total_stats.total_payment || 0).toLocaleString();
+            document.getElementById('product-total-refund').textContent =
+                '₩' + (total_stats.total_refund || 0).toLocaleString();
+            document.getElementById('product-net-sales').textContent =
+                '₩' + (total_stats.total_net_sales || 0).toLocaleString();
+            document.getElementById('product-refund-rate').textContent =
+                (total_stats.refund_rate || 0).toFixed(2) + '%';
+            document.getElementById('product-count').textContent =
+                topOnlyChecked ? `주요 ${total_stats.product_count}개 상품` : `총 ${total_stats.product_count}개 상품`;
+
+            // 차트 제목 업데이트
+            const titleSuffix = topOnlyChecked ? ' (Top 5)' : '';
+            document.getElementById('product-performance-chart-title').textContent =
+                '날짜별 제품별 순매출 추이' + titleSuffix;
+            document.getElementById('product-distribution-chart-title').textContent =
+                '상품별 순매출 구성' + titleSuffix;
+
+            // 날짜별 제품별 누적 막대 + 총합 라인 차트
+            renderProductPerformanceChart(daily_summary, daily_product_summary, product_summary);
+
+            // 상품별 비율 차트 렌더링
+            renderProductDistributionChart(product_summary);
+
+            // 상품 목록 테이블 업데이트
+            updateProductTable(product_summary);
+        }
+
+        function renderProductPerformanceChart(daily_summary, daily_product_summary, product_summary) {
+            console.log('[상품성과] 날짜별 누적 차트 렌더링 시작');
+
+            const ctx = document.getElementById('product-performance-chart');
+
+            if (productPerformanceChart) {
+                console.log('[상품성과] 기존 차트 파괴');
+                productPerformanceChart.destroy();
+                productPerformanceChart = null;
+            }
+
+            // 데이터가 없는 경우 처리
+            if (!daily_summary || !daily_product_summary || !product_summary) {
+                console.log('[상품성과] 데이터 없음, 차트 렌더링 스킵');
+                return;
+            }
+
+            // 날짜 레이블
+            const dateLabels = daily_summary.map(d => d.date);
+
+            // 날짜별 총합 (라인 그래프용)
+            const dailyTotals = daily_summary.map(d => d.net_sales);
+
+            // 모든 제품 사용
+            const products = product_summary;
+
+            // 색상 맵에서 각 제품의 색상 가져오기
+            const colors = products.map(product => productColorMap[product.상품ID]);
+
+            // 제품별 데이터셋 생성 (누적 막대)
+            const datasets = products.map((product, index) => {
+                // 각 날짜별 해당 제품의 순매출
+                const productData = dateLabels.map(date => {
+                    const found = daily_product_summary.find(
+                        d => d.date === date && d.product_id === product.상품ID
+                    );
+                    return found ? found.net_sales : 0;
+                });
+
+                return {
+                    label: product.상품명.length > 25 ? product.상품명.substring(0, 25) + '...' : product.상품명,
+                    data: productData,
+                    backgroundColor: colors[index % colors.length],
+                    borderColor: colors[index % colors.length],
+                    borderWidth: 0,
+                    type: 'bar',
+                    stack: 'stack0',
+                    datalabels: {
+                        display: false  // 막대에는 레이블 숨김
+                    }
+                };
+            });
+
+            // 총합 라인 추가
+            datasets.push({
+                label: '총 순매출',
+                data: dailyTotals,
+                type: 'line',
+                borderColor: 'rgb(30, 30, 30)',
+                backgroundColor: 'transparent',
+                borderWidth: 3,
+                fill: false,
+                tension: 0.3,
+                pointRadius: 5,
+                pointBackgroundColor: 'rgb(30, 30, 30)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                order: 0,  // 라인을 맨 위에
+                yAxisID: 'y',
+                datalabels: {
+                    align: 'top',
+                    anchor: 'end',
+                    offset: 4,
+                    formatter: (value) => {
+                        return (value / 10000).toFixed(0) + '만';
+                    },
+                    font: {
+                        size: 10,
+                        weight: 'bold'
+                    },
+                    color: 'rgb(30, 30, 30)'
+                }
+            });
+
+            productPerformanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dateLabels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: false  // 1. 범례 숨김
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    if (value === 0) return null;  // 3. 0원 미표시
+                                    return context.dataset.label + ': ₩' + value.toLocaleString();  // 2. 원화 표시
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: false  // 기본적으로 datalabels 숨김 (라인에만 표시)
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: { size: 11 }
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    // sales-mainChart와 동일한 단위 사용
+                                    return (value / 10000).toFixed(0) + '만원';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderProductDistributionChart(product_summary) {
+            const ctx = document.getElementById('product-distribution-chart');
+            const productListDiv = document.getElementById('product-list');
+
+            if (productDistributionChart) {
+                productDistributionChart.destroy();
+                productDistributionChart = null;
+            }
+
+            // 데이터가 없는 경우 처리
+            if (!product_summary || product_summary.length === 0) {
+                productListDiv.innerHTML = '<div style="text-align: center; padding: 2rem; color: #9ca3af;">데이터가 없습니다.</div>';
+                return;
+            }
+
+            // 모든 상품 표시
+            const labels = product_summary.map(p => p.상품명.length > 20 ? p.상품명.substring(0, 20) + '...' : p.상품명);
+            const data = product_summary.map(p => p.순매출);
+
+            // 전체 순매출 계산
+            const totalNetSales = product_summary.reduce((sum, p) => sum + p.순매출, 0);
+
+            // 색상 맵에서 각 제품의 색상 가져오기
+            const colors = product_summary.map(product => productColorMap[product.상품ID]);
+
+            productDistributionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors,
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false  // 범례 숨김 (아래 리스트로 대체)
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return label + ': ₩' + value.toLocaleString() + ' (' + percentage + '%)';
+                                }
+                            }
+                        }
+                    },
+                    onClick: (event, activeElements) => {
+                        // 차트 클릭 시 테이블 행으로 스크롤
+                        if (activeElements && activeElements.length > 0) {
+                            const index = activeElements[0].index;
+                            scrollToProductTableRow(index);
+                        }
+                    }
+                }
+            });
+
+            // 상품 목록 렌더링
+            productListDiv.innerHTML = product_summary.map((product, index) => {
+                const percentage = ((product.순매출 / totalNetSales) * 100).toFixed(1);
+                const displayName = product.상품명.length > 35 ? product.상품명.substring(0, 35) + '...' : product.상품명;
+
+                return `
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; border-bottom: 1px solid #f3f4f6; font-size: 0.875rem; cursor: pointer;"
+                         data-product-list-index="${index}"
+                         onmouseenter="this.style.backgroundColor='#f9fafb'"
+                         onmouseleave="this.style.backgroundColor=''"
+                         onclick="scrollToProductTableRow(${index})">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0;">
+                            <div style="width: 12px; height: 12px; border-radius: 2px; background-color: ${colors[index]}; flex-shrink: 0;"></div>
+                            <span style="color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${product.상품명}">${displayName}</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; margin-left: 1rem;">
+                            <span style="color: #6b7280; font-weight: 500;">₩${product.순매출.toLocaleString()}</span>
+                            <span style="color: #9ca3af; font-size: 0.8125rem;">(${percentage}%)</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function scrollToProductTableRow(index) {
+            const tbody = document.getElementById('product-table-body');
+            const rows = tbody.getElementsByTagName('tr');
+            const productListDiv = document.getElementById('product-list');
+
+            // 상품 목록 하이라이트
+            if (productListDiv) {
+                const listItems = productListDiv.querySelectorAll('[data-product-list-index]');
+                listItems.forEach(item => {
+                    item.style.backgroundColor = '';
+                });
+
+                if (listItems[index]) {
+                    listItems[index].style.backgroundColor = '#fef3c7';
+                    setTimeout(() => {
+                        listItems[index].style.backgroundColor = '';
+                    }, 2000);
+                }
+            }
+
+            // 테이블 행 하이라이트 및 스크롤
+            if (rows[index]) {
+                // 모든 행의 하이라이트 제거
+                Array.from(rows).forEach(row => {
+                    row.style.backgroundColor = '';
+                    row.style.transition = '';
+                });
+
+                // 선택된 행 하이라이트
+                rows[index].style.backgroundColor = '#fef3c7';
+                rows[index].style.transition = 'background-color 0.3s';
+
+                // 행으로 스크롤
+                rows[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // 3초 후 하이라이트 제거
+                setTimeout(() => {
+                    rows[index].style.backgroundColor = '';
+                }, 3000);
+            }
+        }
+
+        function updateProductTable(product_summary) {
+            const tbody = document.getElementById('product-table-body');
+
+            if (!product_summary || product_summary.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">데이터가 없습니다.</td></tr>';
+                return;
+            }
+
+            const totalNetSales = product_summary.reduce((sum, p) => sum + p.순매출, 0);
+
+            tbody.innerHTML = product_summary.map((product, index) => {
+                const ratio = ((product.순매출 / totalNetSales) * 100).toFixed(2);
+                return `
+                    <tr style="cursor: pointer;" data-product-index="${index}">
+                        <td>${index + 1}</td>
+                        <td>${product.상품명}</td>
+                        <td>${product.상품ID}</td>
+                        <td style="text-align: right;">₩${product.결제금액.toLocaleString()}</td>
+                        <td style="text-align: right;">₩${product.환불금액.toLocaleString()}</td>
+                        <td style="text-align: right; font-weight: 600;">₩${product.순매출.toLocaleString()}</td>
+                        <td style="text-align: right;">${ratio}%</td>
+                    </tr>
+                `;
+            }).join('');
+
+            // 테이블 행 클릭 이벤트 추가
+            const rows = tbody.getElementsByTagName('tr');
+            Array.from(rows).forEach((row, index) => {
+                row.addEventListener('click', function() {
+                    // 도넛차트가 Top 10만 표시하므로, 10번째 이하는 차트에 없음
+                    if (index < 10 && productDistributionChart) {
+                        // 차트 하이라이트 (Chart.js의 active elements 설정)
+                        productDistributionChart.setActiveElements([{
+                            datasetIndex: 0,
+                            index: index
+                        }]);
+                        productDistributionChart.update();
+
+                        // 차트로 스크롤
+                        document.getElementById('product-distribution-chart').scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center'
+                        });
+
+                        // 2초 후 하이라이트 제거
+                        setTimeout(() => {
+                            if (productDistributionChart) {
+                                productDistributionChart.setActiveElements([]);
+                                productDistributionChart.update();
+                            }
+                        }, 2000);
+                    }
+                });
+
+                // 테이블 행 hover 효과
+                row.addEventListener('mouseenter', function() {
+                    this.style.backgroundColor = '#f9fafb';
+                });
+                row.addEventListener('mouseleave', function() {
+                    if (this.style.backgroundColor === 'rgb(249, 250, 251)') {
+                        this.style.backgroundColor = '';
+                    }
+                });
+            });
         }
     </script>
 </body>

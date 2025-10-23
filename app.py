@@ -527,6 +527,116 @@ def get_ad_data():
             'message': f'광고비 데이터 조회 중 오류가 발생했습니다: {str(e)}'
         }), 500
 
+@app.route('/api/product_performance')
+def get_product_performance():
+    """상품 성과 데이터 조회"""
+    try:
+        product_file = 'data/productperformance.csv'
+
+        if not os.path.exists(product_file):
+            return jsonify({
+                'success': False,
+                'message': '상품성과 데이터 파일을 찾을 수 없습니다.'
+            }), 404
+
+        # CSV 읽기
+        df = pd.read_csv(product_file, encoding='utf-8-sig')
+
+        # 날짜 필터링
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        product_filter = request.args.get('product')  # 상품 필터 (상품명 또는 상품ID)
+
+        # 날짜 컬럼을 날짜 형식으로 변환 (YYYY.MM.DD 형식)
+        df['날짜'] = pd.to_datetime(df['날짜'].str.rstrip('.'), format='%Y.%m.%d', errors='coerce')
+        df = df.dropna(subset=['날짜'])
+
+        # 숫자 컬럼의 쉼표 제거 및 숫자 변환
+        def safe_float_convert(series):
+            return pd.to_numeric(
+                series.astype(str).str.replace(',', '').str.strip().replace('', '0').replace('nan', '0'),
+                errors='coerce'
+            ).fillna(0)
+
+        df['결제금액'] = safe_float_convert(df['결제금액'])
+        df['환불금액'] = safe_float_convert(df['환불금액'])
+
+        # 순매출 계산 (결제금액 - 환불금액)
+        df['순매출'] = df['결제금액'] - df['환불금액']
+
+        if start_date:
+            df = df[df['날짜'] >= start_date]
+        if end_date:
+            df = df[df['날짜'] <= end_date]
+
+        # 상품 필터링 (상품명 또는 상품ID로 검색)
+        if product_filter:
+            df = df[
+                (df['상품명'].str.contains(product_filter, na=False, case=False)) |
+                (df['상품ID'].astype(str).str.contains(product_filter, na=False, case=False))
+            ]
+
+        # 일별 순매출 집계 (누적 막대그래프용)
+        daily_summary = df.groupby(df['날짜'].dt.date).agg({
+            '결제금액': 'sum',
+            '환불금액': 'sum',
+            '순매출': 'sum'
+        }).reset_index()
+        daily_summary.columns = ['date', 'payment_amount', 'refund_amount', 'net_sales']
+        daily_summary['date'] = daily_summary['date'].apply(normalize_date_value)
+
+        # 상품별 순매출 집계 (파이차트용)
+        product_summary = df.groupby(['상품명', '상품ID']).agg({
+            '순매출': 'sum',
+            '결제금액': 'sum',
+            '환불금액': 'sum'
+        }).reset_index()
+        product_summary = product_summary.sort_values('순매출', ascending=False)
+
+        # 일별 상품별 순매출 집계 (누적 막대그래프용)
+        # Top 10 상품만 선택
+        top10_products = product_summary.head(10)['상품ID'].tolist()
+
+        daily_product_summary = df[df['상품ID'].isin(top10_products)].groupby([
+            df['날짜'].dt.date, '상품명', '상품ID'
+        ]).agg({
+            '순매출': 'sum'
+        }).reset_index()
+        daily_product_summary.columns = ['date', 'product_name', 'product_id', 'net_sales']
+        daily_product_summary['date'] = daily_product_summary['date'].apply(normalize_date_value)
+
+        # 전체 통계
+        total_payment = float(df['결제금액'].sum())
+        total_refund = float(df['환불금액'].sum())
+        total_net_sales = float(df['순매출'].sum())
+
+        refund_rate = (total_refund / total_payment * 100) if total_payment > 0 else 0
+
+        total_stats = {
+            'total_payment': total_payment,
+            'total_refund': total_refund,
+            'total_net_sales': total_net_sales,
+            'refund_rate': refund_rate,
+            'product_count': int(df['상품ID'].nunique()),
+            'date_range_days': int((df['날짜'].max() - df['날짜'].min()).days + 1) if len(df) > 0 else 0
+        }
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_stats': total_stats,
+                'daily_summary': daily_summary.to_dict('records'),
+                'product_summary': product_summary.to_dict('records'),
+                'daily_product_summary': daily_product_summary.to_dict('records')
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'상품성과 데이터 조회 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
 @app.route('/api/timeslot_data')
 def get_timeslot_data():
     """시간대별 유입 및 결제 데이터 조회"""
