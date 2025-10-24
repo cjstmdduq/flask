@@ -540,6 +540,147 @@
             from { opacity: 0; }
             to { opacity: 1; }
         }
+
+        /* 데이터 정보 컨테이너 스타일 */
+        .data-info-container {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .data-info-header {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .data-info-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .data-info-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .data-info-item:last-child {
+            border-bottom: none;
+        }
+
+        .data-info-number {
+            font-weight: 600;
+            color: #6b7280;
+            margin-right: 0.75rem;
+            min-width: 1.5rem;
+        }
+
+        .data-info-path {
+            flex: 1;
+            font-size: 0.875rem;
+            color: #374151;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .data-info-filename {
+            color: #2563eb;
+            cursor: pointer;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .data-info-filename:hover {
+            color: #1d4ed8;
+            text-decoration: underline;
+        }
+
+        .data-info-upload-section {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .data-info-upload-btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #374151;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .data-info-upload-btn:hover {
+            background: #f9fafb;
+            border-color: #2563eb;
+            color: #2563eb;
+        }
+
+        .data-info-upload-btn i {
+            width: 16px;
+            height: 16px;
+        }
+
+        .data-info-upload-input {
+            display: none;
+        }
+
+        .data-info-upload-status {
+            font-size: 0.8125rem;
+            color: #6b7280;
+        }
+
+        .data-info-upload-status.success {
+            color: #059669;
+        }
+
+        .data-info-upload-status.error {
+            color: #dc2626;
+        }
+
+        .data-info-date-input {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .data-info-date-input label {
+            font-size: 0.8125rem;
+            color: #6b7280;
+            white-space: nowrap;
+        }
+
+        .data-info-date-input input[type="date"] {
+            padding: 0.375rem 0.5rem;
+            font-size: 0.8125rem;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            color: #374151;
+        }
+
+        .data-info-date-input input[type="date"]:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+
     </style>
 </head>
 <body>
@@ -593,11 +734,49 @@
                             <!-- 판매성과 대시보드 -->
                             <div class="tab-pane fade show active" id="sales-dashboard" role="tabpanel">
                                 <div id="sales-content"></div>
+
+                                <!-- 데이터 정보 -->
+                                <div class="data-info-container">
+                                    <div class="data-info-header">연동 데이터베이스</div>
+                                    <ul class="data-info-list">
+                                        <li class="data-info-item">
+                                            <span class="data-info-number">1.</span>
+                                            <span class="data-info-path">
+                                                data &gt; <a href="#" class="data-info-filename" onclick="downloadOriginalData('sales'); return false;">SalesPerformance.csv</a>
+                                            </span>
+                                        </li>
+                                        <li class="data-info-item">
+                                            <span class="data-info-number">2.</span>
+                                            <span class="data-info-path">
+                                                data &gt; <a href="#" class="data-info-filename" onclick="downloadOriginalData('ad'); return false;">AdMultipleReport.csv</a>
+                                            </span>
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
 
                             <!-- 정산기준 대시보드 -->
                             <div class="tab-pane fade" id="settle-dashboard" role="tabpanel">
                                 <div id="settle-content"></div>
+
+                                <!-- 데이터 정보 -->
+                                <div class="data-info-container">
+                                    <div class="data-info-header">연동 데이터베이스</div>
+                                    <ul class="data-info-list">
+                                        <li class="data-info-item">
+                                            <span class="data-info-number">1.</span>
+                                            <span class="data-info-path">
+                                                data &gt; <a href="#" class="data-info-filename" onclick="downloadOriginalData('settle'); return false;">SettleCaseByCase.csv</a>
+                                            </span>
+                                        </li>
+                                        <li class="data-info-item">
+                                            <span class="data-info-number">2.</span>
+                                            <span class="data-info-path">
+                                                data &gt; <a href="#" class="data-info-filename" onclick="downloadOriginalData('ad'); return false;">AdMultipleReport.csv</a>
+                                            </span>
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -605,11 +784,43 @@
                     <!-- 시간대별 유입 분석 섹션 -->
                     <div id="timeslot-analysis-section" style="display: none;">
                         <div id="timeslot-content"></div>
+
+                        <!-- 데이터 정보 -->
+                        <div class="data-info-container">
+                            <div class="data-info-header">연동 데이터베이스</div>
+                            <ul class="data-info-list">
+                                <li class="data-info-item">
+                                    <span class="data-info-number">1.</span>
+                                    <span class="data-info-path">
+                                        data &gt; <a href="#" class="data-info-filename" onclick="downloadOriginalData('timeslot'); return false;">timeslot.csv</a>
+                                    </span>
+                                </li>
+                                <li class="data-info-item">
+                                    <span class="data-info-number">2.</span>
+                                    <span class="data-info-path">
+                                        data &gt; <a href="#" class="data-info-filename" onclick="downloadOriginalData('sales'); return false;">SalesPerformance.csv</a>
+                                    </span>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
 
                     <!-- 상품성과분석 섹션 -->
                     <div id="product-performance-section" style="display: none;">
                         <div id="product-performance-content"></div>
+
+                        <!-- 데이터 정보 -->
+                        <div class="data-info-container">
+                            <div class="data-info-header">연동 데이터베이스</div>
+                            <ul class="data-info-list">
+                                <li class="data-info-item">
+                                    <span class="data-info-number">1.</span>
+                                    <span class="data-info-path">
+                                        data &gt; <a href="#" class="data-info-filename" onclick="downloadOriginalData('product'); return false;">productperformance.csv</a>
+                                    </span>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1093,6 +1304,7 @@
         async function loadTimeslotData() {
             const startDate = document.getElementById('timeslot-startDate').value;
             const endDate = document.getElementById('timeslot-endDate').value;
+            console.log('시간대별 데이터 로드:', startDate, '~', endDate);
             setTimeslotDateRangeLabel(startDate, endDate);
 
             try {
@@ -1100,10 +1312,13 @@
                 const result = await response.json();
 
                 if (result.success) {
+                    console.log('데이터 로드 성공:', result.data);
                     timeslotData = result.data;
                     selectedHeatmapCell = null;
                     updateTimeslotCharts();
                     lucide.createIcons();
+                } else {
+                    console.error('데이터 로드 실패:', result.message);
                 }
             } catch (error) {
                 console.error('타임슬롯 데이터 로드 오류:', error);
@@ -1194,6 +1409,16 @@
             // 다중보기 처리
             if (metric === 'multi') {
                 renderMultiMetricHeatmap();
+                return;
+            }
+
+            // 데이터가 없으면 차트 삭제하고 플레이스홀더 표시
+            if (!timeslotData || !timeslotData.heatmap_data || timeslotData.heatmap_data.length === 0) {
+                if (timeslotHeatmapChart) {
+                    timeslotHeatmapChart.destroy();
+                    timeslotHeatmapChart = null;
+                }
+                setHeatmapPlaceholder(true);
                 return;
             }
 
@@ -1349,7 +1574,9 @@
                         label: metricKey,
                         data: heatmapPoints,
                         backgroundColor(context) {
-                            const value = context.dataset.data[context.dataIndex].v;
+                            const point = context.dataset.data[context.dataIndex];
+                            if (!point) return 'rgba(226, 232, 240, 0.6)';
+                            const value = point.v;
                             return getHeatmapColor(value, maxValue);
                         },
                         borderWidth: 1,
@@ -4612,6 +4839,76 @@
                 });
             });
         }
+
+        // 원본 데이터 다운로드 링크 (네이버 스마트스토어 플랫폼으로 이동)
+        function downloadOriginalData(dataType) {
+            // 데이터 타입별 네이버 스마트스토어 URL 매핑
+            const platformUrls = {
+                'sales': 'https://sell.smartstore.naver.com/#/bizadvisor/sales',
+                'settle': 'https://sell.smartstore.naver.com/#/naverpay/settlemgt/sellerdailysettle',
+                'ad': 'https://manage.searchad.naver.com/customers/1236324/reports/rtt-a001-000000000858379',
+                'timeslot': 'https://sell.smartstore.naver.com/#/bizadvisor/marketing/time',
+                'product': 'https://sell.smartstore.naver.com/#/bizadvisor/sales/product'
+            };
+
+            const url = platformUrls[dataType];
+
+            if (url) {
+                // 새 탭에서 플랫폼 URL 열기
+                window.open(url, '_blank');
+            } else {
+                alert('해당 데이터의 다운로드 링크를 찾을 수 없습니다.');
+            }
+        }
+
+        // 파일 업로드 처리 함수
+        async function handleFileUpload(event, dataType) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const statusElement = document.getElementById(`upload-status-${dataType}`);
+            statusElement.textContent = '업로드 중...';
+            statusElement.className = 'data-info-upload-status';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('data_type', dataType);
+
+                const response = await fetch('/api/upload_data', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusElement.textContent = `✓ ${result.added_rows}개 행 추가됨`;
+                    statusElement.className = 'data-info-upload-status success';
+
+                    // 3초 후 페이지 새로고침하여 새 데이터 반영
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    statusElement.textContent = `✗ ${result.message}`;
+                    statusElement.className = 'data-info-upload-status error';
+                }
+            } catch (error) {
+                statusElement.textContent = `✗ 업로드 실패: ${error.message}`;
+                statusElement.className = 'data-info-upload-status error';
+            }
+
+            // 파일 입력 초기화
+            event.target.value = '';
+        }
+
+        // Lucide 아이콘 초기화 (페이지 로드 후)
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        });
     </script>
 </body>
 </html>
