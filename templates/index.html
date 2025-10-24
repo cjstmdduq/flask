@@ -649,7 +649,16 @@
         let salesData = { total_stats: {}, daily_summary: [] };
         let settleData = { total_stats: {}, daily_summary: [] };
         let adData = { total_stats: {}, daily_summary: [] };
-        let timeslotData = { total_stats: {}, heatmap_data: [], channel_hourly: [], channel_weekday_hourly: [], weekday_order: [] };
+        let timeslotData = { 
+            total_stats: {}, 
+            heatmap_data: [], 
+            channel_hourly: [], 
+            channel_weekday_hourly: [], 
+            weekday_order: [], 
+            daily_totals: [],
+            inflow_raw: [],
+            sales_raw: []
+        };
         let selectedHeatmapCell = null;
         const heatmapValuePlugin = {
             id: 'heatmapValuePlugin',
@@ -860,6 +869,7 @@
                         <div>
                             <div class="date-filter-title" style="margin-bottom: 0.5rem;">기간 선택</div>
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <button class="date-preset-btn" data-type="timeslot" data-days="1">어제</button>
                                 <button class="date-preset-btn" data-type="timeslot" data-days="7">최근 7일</button>
                                 <button class="date-preset-btn" data-type="timeslot" data-days="14">최근 14일</button>
                                 <button class="date-preset-btn active" data-type="timeslot" data-days="30">최근 30일</button>
@@ -891,10 +901,6 @@
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                 <button class="date-preset-btn" data-type="timeslot" data-preset="this-week">이번주</button>
                                 <button class="date-preset-btn" data-type="timeslot" data-preset="last-week">저번주</button>
-                                <button class="date-preset-btn" data-type="timeslot" data-preset="this-month">이번달</button>
-                                <button class="date-preset-btn" data-type="timeslot" data-preset="last-month">저번달</button>
-                                <button class="date-preset-btn" data-type="timeslot" data-preset="this-quarter">이번분기</button>
-                                <button class="date-preset-btn" data-type="timeslot" data-preset="current-half">반기</button>
                                 <button class="date-preset-btn" data-type="timeslot" data-preset="current-year">년</button>
                             </div>
                         </div>
@@ -1151,22 +1157,7 @@
                     // 결제 지표 메시지 표시
                     document.getElementById('payment-metric-message').style.display = 'block';
                     document.getElementById('channel-chart-content').style.display = 'none';
-                    
-                    // 전환률 계산 및 표시
-                    if (metric === 'conversion') {
-                        const totalCustomers = timeslotData.total_stats.customer || 0;
-                        const totalPayers = timeslotData.total_stats.payers || 0;
-                        const conversionRate = totalCustomers > 0 ? (totalPayers / totalCustomers * 100).toFixed(2) : 0;
-                        document.getElementById('conversion-rate').textContent = `${conversionRate}%`;
-                    }
-                    
-                    // 객단가 계산 및 표시
-                    if (metric === 'aov') {
-                        const totalAmount = timeslotData.total_stats.amount || 0;
-                        const totalPayers = timeslotData.total_stats.payers || 0;
-                        const aov = totalPayers > 0 ? Math.round(totalAmount / totalPayers) : 0;
-                        document.getElementById('average-order-value').textContent = `${aov.toLocaleString()}원`;
-                    }
+                    // 결제 지표 계산은 calculatePaymentMetrics에서 통합 처리
                 } else {
                     // 일반 지표 선택 시
                     document.getElementById('payment-metric-message').style.display = 'none';
@@ -1226,8 +1217,7 @@
 
             // 히트맵 데이터 변환 - X축: 요일, Y축: 시간대
             const heatmapPoints = [];
-            const totalsByWeekday = new Map();
-            const countsByWeekday = new Map(); // 전환률/객단가 평균 계산용
+            const aggregatesByWeekday = new Map();
             
             timeslotData.heatmap_data.forEach(item => {
                 const hour = item['시간'];
@@ -1258,26 +1248,41 @@
                 });
                 const weekday = item['요일'];
                 
-                if (metric === 'conversion' || metric === 'aov') {
-                    // 전환률/객단가는 평균 계산
-                    const currentTotal = totalsByWeekday.get(weekday) || 0;
-                    const currentCount = countsByWeekday.get(weekday) || 0;
-                    totalsByWeekday.set(weekday, currentTotal + value);
-                    countsByWeekday.set(weekday, currentCount + 1);
+                const aggregate = aggregatesByWeekday.get(weekday) || {
+                    valueSum: 0,
+                    count: 0,
+                    customers: 0,
+                    payers: 0,
+                    amount: 0
+                };
+
+                if (metric === 'conversion') {
+                    aggregate.customers += item['고객수'] || 0;
+                    aggregate.payers += item['결제자수'] || 0;
+                } else if (metric === 'aov') {
+                    aggregate.payers += item['결제자수'] || 0;
+                    aggregate.amount += item['결제금액'] || 0;
                 } else {
-                    // 일반 지표는 합계 계산
-                    totalsByWeekday.set(weekday, (totalsByWeekday.get(weekday) || 0) + value);
+                    aggregate.valueSum += value;
+                    aggregate.count += 1;
                 }
+
+                aggregatesByWeekday.set(weekday, aggregate);
             });
             
             // 요일별 합계/평균 계산
             const columnTotals = weekdayOrder.map(day => {
                 if (metric === 'conversion' || metric === 'aov') {
-                    const total = totalsByWeekday.get(day) || 0;
-                    const count = countsByWeekday.get(day) || 0;
-                    return count > 0 ? total / count : 0;
+                    const aggregate = aggregatesByWeekday.get(day) || { customers: 0, payers: 0, amount: 0 };
+                    if (metric === 'conversion') {
+                        const { customers, payers } = aggregate;
+                        return customers > 0 ? (payers / customers) * 100 : 0;
+                    }
+                    const { payers, amount } = aggregate;
+                    return payers > 0 ? amount / payers : 0;
                 } else {
-                    return totalsByWeekday.get(day) || 0;
+                    const aggregate = aggregatesByWeekday.get(day) || { valueSum: 0 };
+                    return aggregate.valueSum || 0;
                 }
             });
             
@@ -2326,50 +2331,37 @@
         }
 
         function calculatePaymentMetrics() {
-            // 유입 데이터와 결제 데이터 참조
-            const inflowData = timeslotData.weekday_hourly || [];
-            const salesData = timeslotData.sales_data || [];
-            
+            const inflowRaw = timeslotData.inflow_raw || [];
+            const salesRaw = timeslotData.sales_raw || [];
+            const totals = timeslotData.total_stats || {};
+
             let totalCustomers = 0;
             let totalPayers = 0;
             let totalAmount = 0;
             let filterText = '전체 기간';
-            
-            // 히트맵 셀 선택 시 필터링
+
             if (selectedHeatmapCell) {
-                const weekday = selectedHeatmapCell.weekday;
-                const hour = selectedHeatmapCell.hour;
-                
-                // 유입 데이터에서 고객수 추출
-                const inflowFiltered = inflowData.filter(item => 
-                    item['요일'] === weekday && item['시간'] === hour
-                );
-                totalCustomers = inflowFiltered.reduce((sum, item) => sum + (item['고객수'] || 0), 0);
-                
-                // 결제 데이터에서 결제자수, 결제금액 추출
-                const salesFiltered = salesData.filter(item =>
-                    item['요일'] === weekday && item['시간대'] === hour + '시'
-                );
+                const { weekday, hour } = selectedHeatmapCell;
+                filterText = `${weekday} ${hour}시`;
+
+                totalCustomers = inflowRaw
+                    .filter(item => item['요일'] === weekday && item['시간'] === hour)
+                    .reduce((sum, item) => sum + (item['고객수'] || 0), 0);
+
+                const salesFiltered = salesRaw.filter(item => item['요일'] === weekday && item['시간'] === hour);
                 totalPayers = salesFiltered.reduce((sum, item) => sum + (item['결제자수'] || 0), 0);
                 totalAmount = salesFiltered.reduce((sum, item) => sum + (item['결제금액'] || 0), 0);
-                
-                filterText = `${weekday} ${hour}시`;
             } else {
-                // 전체 데이터 집계
-                totalCustomers = inflowData.reduce((sum, item) => sum + (item['고객수'] || 0), 0);
-                totalPayers = salesData.reduce((sum, item) => sum + (item['결제자수'] || 0), 0);
-                totalAmount = salesData.reduce((sum, item) => sum + (item['결제금액'] || 0), 0);
+                totalCustomers = totals.total_customers || 0;
+                totalPayers = totals.total_payers || 0;
+                totalAmount = totals.total_amount || 0;
             }
-            
-            // 전환율 계산 (결제자수 / 고객수 * 100)
-            const conversionRate = totalCustomers > 0 ? ((totalPayers / totalCustomers) * 100).toFixed(2) : 0;
-            
-            // 객단가 계산 (결제금액 / 결제자수)
+
+            const conversionRate = totalCustomers > 0 ? ((totalPayers / totalCustomers) * 100).toFixed(2) : '0.00';
             const avgOrderValue = totalPayers > 0 ? Math.round(totalAmount / totalPayers) : 0;
-            
-            // UI 업데이트
-            document.getElementById('conversion-rate').textContent = conversionRate + '%';
-            document.getElementById('average-order-value').textContent = avgOrderValue.toLocaleString() + '원';
+
+            document.getElementById('conversion-rate').textContent = `${conversionRate}%`;
+            document.getElementById('average-order-value').textContent = `${avgOrderValue.toLocaleString()}원`;
             document.getElementById('payment-filter-info').textContent = filterText;
         }
 
@@ -2449,11 +2441,10 @@
                             <div style="margin-bottom: 0.75rem;">
                                 <div class="date-filter-title" style="margin-bottom: 0.5rem;">기간 선택</div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    <button class="date-preset-btn" data-type="${prefix}" data-days="1">어제</button>
                                     <button class="date-preset-btn" data-type="${prefix}" data-days="7">최근 7일</button>
                                     <button class="date-preset-btn active" data-type="${prefix}" data-days="14">최근 14일</button>
                                     <button class="date-preset-btn" data-type="${prefix}" data-days="30">최근 30일</button>
-                                    <button class="date-preset-btn" data-type="${prefix}" data-preset="this-month">이번달</button>
-                                    <button class="date-preset-btn" data-type="${prefix}" data-preset="last-month">저번달</button>
 
                                     <span style="color: #d1d5db; margin: 0 0.25rem;">|</span>
 
@@ -2780,18 +2771,6 @@
                     break;
                 case 'last-week':
                     setLastWeek(prefix);
-                    break;
-                case 'this-month':
-                    setThisMonth(prefix);
-                    break;
-                case 'last-month':
-                    setLastMonth(prefix);
-                    break;
-                case 'this-quarter':
-                    setThisQuarter(prefix);
-                    break;
-                case 'current-half':
-                    setCurrentHalf(prefix);
                     break;
                 case 'current-year':
                     setCurrentYear(prefix);
@@ -3287,11 +3266,10 @@
                     <div class="modal-control-group" style="flex: 1 1 100%;">
                         <div class="date-filter-title" style="margin-bottom: 0.5rem;">기간 선택</div>
                         <div class="modal-filter-row">
+                            <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-days="1">어제</button>
                             <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-days="7">최근 7일</button>
                             <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-days="14">최근 14일</button>
                             <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-days="30">최근 30일</button>
-                            <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-preset="this-month">이번달</button>
-                            <button class="date-preset-btn modal-preset-btn" data-type="${prefix}" data-preset="last-month">저번달</button>
                             <span style="color: #d1d5db; margin: 0 0.25rem;">|</span>
                             <input type="date" id="modal-${prefix}-startDate" class="form-control modal-date-input" style="width: 150px;">
                             <span style="color: #6b7280;">~</span>
@@ -3421,10 +3399,8 @@
                     } else {
                         if (days) {
                             setDateRange(prefix, parseInt(days, 10));
-                        } else if (preset === 'this-month') {
-                            setThisMonth(prefix);
-                        } else if (preset === 'last-month') {
-                            setLastMonth(prefix);
+                        } else if (preset) {
+                            applyDatePreset(prefix, preset);
                         }
 
                         if (prefix === 'sales') {
@@ -4031,12 +4007,11 @@
                 <!-- 날짜 필터 -->
                 <div class="date-filter-section" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                        <button class="date-preset-btn" data-type="product" data-days="1">어제</button>
                         <button class="date-preset-btn" data-type="product" data-days="7">최근 7일</button>
                         <button class="date-preset-btn active" data-type="product" data-days="14">최근 14일</button>
                         <button class="date-preset-btn" data-type="product" data-days="30">최근 30일</button>
                         <button class="date-preset-btn" data-type="product" data-days="90">최근 90일</button>
-                        <button class="date-preset-btn" data-type="product" data-preset="this-month">이번 달</button>
-                        <button class="date-preset-btn" data-type="product" data-preset="last-month">지난 달</button>
                         <div style="width: 1px; height: 24px; background: #e5e7eb; margin: 0 0.5rem;"></div>
                         <button class="btn-filter" style="width: 36px; padding: 0.5rem;" onclick="navigateDates('product', -1)" title="이전">
                             <i data-lucide="chevron-left"></i>
@@ -4160,10 +4135,8 @@
 
                     if (days) {
                         setDateRange('product', parseInt(days));
-                    } else if (preset === 'this-month') {
-                        setThisMonth('product');
-                    } else if (preset === 'last-month') {
-                        setLastMonth('product');
+                    } else if (preset) {
+                        applyDatePreset('product', preset);
                     }
 
                     loadProductPerformanceData();
