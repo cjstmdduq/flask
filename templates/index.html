@@ -971,6 +971,9 @@
                                 </div>
                             <div style="position: relative; height: 520px;">
                                 <canvas id="timeslot-heatmap"></canvas>
+                                <div id="timeslot-heatmap-placeholder" style="display: none; position: absolute; inset: 0; align-items: center; justify-content: center; font-size: 0.9375rem; color: #9ca3af; background: rgba(255, 255, 255, 0.9);">
+                                    지표를 선택하세요
+                                </div>
                             </div>
                             <div style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">
                                 💡 히트맵의 셀을 클릭하면 해당 시간대의 채널별 유입 현황을 우측 차트에서 확인할 수 있습니다.
@@ -1184,12 +1187,26 @@
             updateAreaChart(metric);
         }
 
+        function setHeatmapPlaceholder(visible, message = '지표를 선택하세요') {
+            const placeholder = document.getElementById('timeslot-heatmap-placeholder');
+            if (!placeholder) return;
+
+            if (visible) {
+                placeholder.style.display = 'flex';
+                placeholder.textContent = message;
+            } else {
+                placeholder.style.display = 'none';
+            }
+        }
+
         function updateHeatmapChart(metric) {
             // 다중보기 처리
             if (metric === 'multi') {
                 renderMultiMetricHeatmap();
                 return;
             }
+
+            setHeatmapPlaceholder(false);
             
             const metricMap = {
                 'customer': '고객수',
@@ -1865,9 +1882,18 @@
                 // 선택된 지표가 없으면 빈 히트맵 표시
                 if (timeslotHeatmapChart) {
                     timeslotHeatmapChart.destroy();
+                    timeslotHeatmapChart = null;
                 }
+                const canvas = document.getElementById('timeslot-heatmap');
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+                setHeatmapPlaceholder(true);
                 return;
             }
+
+            setHeatmapPlaceholder(false);
             
             const weekdayOrder = timeslotData.weekday_order || ['일', '월', '화', '수', '목', '금', '토'];
             const timeSlotLabels = Array.from({ length: 24 }, (_, hour) => {
@@ -2815,20 +2841,14 @@
         }
 
         function getPreviousYearSameWeekday(dateStr) {
-            // 전년도 동일 요일 찾기
+            // 52주(364일) 전 날짜는 항상 동일 요일
             const currentDate = new Date(dateStr);
-            const currentWeekday = currentDate.getDay();
+            if (isNaN(currentDate.getTime())) {
+                return '';
+            }
 
-            // 1년 전 날짜
             const previousYear = new Date(currentDate);
-            previousYear.setFullYear(currentDate.getFullYear() - 1);
-
-            // 요일 차이 계산
-            const previousWeekday = previousYear.getDay();
-            const dayDiff = currentWeekday - previousWeekday;
-
-            // 동일 요일로 맞추기
-            previousYear.setDate(previousYear.getDate() + dayDiff);
+            previousYear.setDate(previousYear.getDate() - 364);
 
             return formatDate(previousYear);
         }
@@ -2970,6 +2990,24 @@
                 label += ': ';
             }
             label += formatCurrency(context.parsed.y);
+            
+            // 전년도 데이터인 경우 원래 날짜 정보 추가
+            if (label.includes('전년도') && context.dataset.originalDates) {
+                const dataIndex = context.dataIndex;
+                const originalDate = context.dataset.originalDates[dataIndex];
+                if (originalDate) {
+                    // 날짜 형식을 yyyy.mm.dd(요일) 형태로 변환
+                    const dateObj = new Date(originalDate);
+                    const year = dateObj.getFullYear();
+                    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const day = String(dateObj.getDate()).padStart(2, '0');
+                    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+                    const weekday = weekdays[dateObj.getDay()];
+                    const formattedDate = `${year}.${month}.${day}(${weekday})`;
+                    label += ` (${formattedDate})`;
+                }
+            }
+            
             return label;
         }
 
@@ -3042,7 +3080,8 @@
             let prevYearData = null;
             if (showPrevYear && dates.length > 0) {
                 console.log('Loading previous year data for type:', type);
-                prevYearData = await loadPreviousYearData(type, dates);
+                // 각 날짜에 대해 개별적으로 전년도 데이터 로드
+                prevYearData = await loadPreviousYearDataForDates(type, dates);
                 console.log('Previous year data loaded:', prevYearData);
             }
 
@@ -3067,7 +3106,8 @@
                         borderDash: [5, 5],
                         tension: 0.4,
                         fill: false,
-                        pointRadius: 2
+                        pointRadius: 2,
+                        originalDates: prevYearData.originalDates  // 원래 날짜 정보 추가
                     });
                 }
             }
@@ -3091,7 +3131,8 @@
                         borderDash: [5, 5],
                         tension: 0.4,
                         fill: false,
-                        pointRadius: 2
+                        pointRadius: 2,
+                        originalDates: prevYearData.originalDates  // 원래 날짜 정보 추가
                     });
                 }
             }
@@ -3117,7 +3158,8 @@
                         tension: 0.4,
                         fill: false,
                         pointRadius: 2,
-                        yAxisID: 'y1'
+                        yAxisID: 'y1',
+                        originalDates: prevYearData.originalDates  // 원래 날짜 정보 추가
                     });
                 }
             }
@@ -3670,6 +3712,96 @@
             }
         });
 
+        async function loadPreviousYearDataForDates(type, dates) {
+            if (!dates || dates.length === 0) {
+                return null;
+            }
+
+            console.log('Loading previous year data for individual dates:', dates);
+
+            const payments = [];
+            const netSales = [];
+            const adCosts = [];
+            const originalDates = [];
+
+            // 각 날짜에 대해 개별적으로 전년도 데이터 로드
+            for (let i = 0; i < dates.length; i++) {
+                const currentDate = dates[i];
+                const prevYearDate = getPreviousYearSameWeekday(currentDate);
+                
+                console.log(`Processing date ${i}: ${currentDate} -> ${prevYearDate}`);
+                
+                try {
+                    // 개별 날짜에 대한 전년도 데이터 로드
+                    const dayData = await loadSingleDayPreviousYearData(type, prevYearDate);
+                    
+                    if (dayData) {
+                        payments.push(dayData.payment || 0);
+                        netSales.push(dayData.netSales || 0);
+                        adCosts.push(dayData.adCost || 0);
+                        originalDates.push(prevYearDate);
+                        console.log(`Found data for ${prevYearDate}: payment=${dayData.payment}, netSales=${dayData.netSales}, adCost=${dayData.adCost}`);
+                    } else {
+                        payments.push(0);
+                        netSales.push(0);
+                        adCosts.push(0);
+                        originalDates.push(prevYearDate);
+                        console.log(`No data found for ${prevYearDate}, using 0`);
+                    }
+                } catch (error) {
+                    console.error(`Error loading data for ${prevYearDate}:`, error);
+                    payments.push(0);
+                    netSales.push(0);
+                    adCosts.push(0);
+                    originalDates.push(prevYearDate);
+                }
+            }
+
+            return {
+                payments,
+                netSales,
+                adCosts,
+                originalDates
+            };
+        }
+
+        async function loadSingleDayPreviousYearData(type, date) {
+            try {
+                const apiUrl = type === 'sales' ? '/api/sales_performance' : '/api/settle_data';
+                const [dataResponse, adResponse] = await Promise.all([
+                    fetch(`${apiUrl}?start_date=${date}&end_date=${date}`),
+                    fetch(`/api/ad_data?start_date=${date}&end_date=${date}`)
+                ]);
+
+                const dataResult = await dataResponse.json();
+                const adResult = await adResponse.json();
+
+                if (!dataResult.success || !adResult.success) {
+                    return null;
+                }
+
+                let payment = 0;
+                let netSales = 0;
+                let adCost = 0;
+
+                if (dataResult.data.daily_summary && dataResult.data.daily_summary.length > 0) {
+                    const dayData = dataResult.data.daily_summary[0];
+                    payment = dayData.gross_sales || 0;
+                    netSales = dayData.net_sales || 0;
+                }
+
+                if (adResult.data.daily_summary && adResult.data.daily_summary.length > 0) {
+                    const dayAdData = adResult.data.daily_summary[0];
+                    adCost = dayAdData.total_cost || 0;
+                }
+
+                return { payment, netSales, adCost };
+            } catch (error) {
+                console.error('Error loading single day data:', error);
+                return null;
+            }
+        }
+
         async function loadPreviousYearData(type, currentDates) {
             if (!currentDates || currentDates.length === 0) {
                 return null;
@@ -3683,7 +3815,14 @@
             const startDate = sortedPrevDates[0];
             const endDate = sortedPrevDates[sortedPrevDates.length - 1];
 
-            console.log('Loading previous year data:', { startDate, endDate, currentDates, previousYearDates });
+            console.log('Loading previous year data:', { 
+                startDate, 
+                endDate, 
+                currentDates, 
+                previousYearDates,
+                currentDatesCount: currentDates.length,
+                previousYearDatesCount: previousYearDates.length
+            });
 
             try {
                 const apiUrl = type === 'sales' ? '/api/sales_performance' : '/api/settle_data';
@@ -3700,6 +3839,32 @@
                 if (!dataResult.success || !adResult.success) {
                     console.error('Failed to load previous year data');
                     return null;
+                }
+
+                // 전년도 데이터가 없는 경우 확인
+                if (!dataResult.data.daily_summary || dataResult.data.daily_summary.length === 0) {
+                    console.log('No previous year data found, returning zeros');
+                    return {
+                        payments: new Array(previousYearDates.length).fill(0),
+                        netSales: new Array(previousYearDates.length).fill(0),
+                        adCosts: new Array(previousYearDates.length).fill(0),
+                        originalDates: previousYearDates
+                    };
+                }
+
+                // 전년도 데이터가 있지만 해당 날짜의 데이터가 없는 경우도 확인
+                const hasValidData = dataResult.data.daily_summary.some(item => {
+                    return previousYearDates.includes(item.date);
+                });
+                
+                if (!hasValidData) {
+                    console.log('No matching previous year data found for the requested dates, returning zeros');
+                    return {
+                        payments: new Array(previousYearDates.length).fill(0),
+                        netSales: new Array(previousYearDates.length).fill(0),
+                        adCosts: new Array(previousYearDates.length).fill(0),
+                        originalDates: previousYearDates
+                    };
                 }
 
                 // 날짜별 데이터 매핑
@@ -3729,6 +3894,7 @@
                 }
 
                 console.log('Data map created:', dataMap);
+                console.log('Previous year dates to map:', previousYearDates);
 
                 // 현재 날짜 순서에 맞춰 전년도 데이터 정렬
                 const payments = [];
@@ -3736,16 +3902,20 @@
                 const adCosts = [];
 
                 previousYearDates.forEach((prevDate, index) => {
+                    const currentDate = currentDates[index];
                     const data = dataMap.get(prevDate);
-                    if (data) {
+                    console.log(`Mapping: currentDate=${currentDate} -> prevDate=${prevDate}, data:`, data);
+                    if (data && (data.payment > 0 || data.netSales > 0 || data.adCost > 0)) {
                         payments.push(data.payment || 0);
                         netSales.push(data.netSales || 0);
                         adCosts.push(data.adCost || 0);
+                        console.log(`Found valid data for ${prevDate}: payment=${data.payment}, netSales=${data.netSales}, adCost=${data.adCost}`);
                     } else {
-                        // 데이터가 없는 경우에도 0으로 표시 (null이면 차트에서 끊김)
+                        // 데이터가 없는 경우 또는 모든 값이 0인 경우 0으로 표시
                         payments.push(0);
                         netSales.push(0);
                         adCosts.push(0);
+                        console.log(`No valid data found for ${prevDate}, using 0`);
                     }
                 });
 
@@ -3757,7 +3927,12 @@
                     hasValidData: payments.some(p => p > 0)
                 });
 
-                return { payments, netSales, adCosts };
+                return { 
+                    payments, 
+                    netSales, 
+                    adCosts,
+                    originalDates: previousYearDates  // 원래 날짜 정보 추가
+                };
             } catch (error) {
                 console.error('전년도 데이터 로드 오류:', error);
                 return null;
@@ -3769,8 +3944,76 @@
         let productDistributionChart = null;
         let productPerformanceData = null;
         let productColorMap = {}; // 제품ID별 색상 맵
+        let productColorIndex = 0; // 신규 색상 배정 시 사용
+
+        const PRODUCT_BASE_COLORS = [
+            'rgba(59, 130, 246, 0.85)',    // 밝은 파랑
+            'rgba(16, 185, 129, 0.85)',    // 에메랄드
+            'rgba(251, 146, 60, 0.85)',    // 주황
+            'rgba(168, 85, 247, 0.85)',    // 보라
+            'rgba(236, 72, 153, 0.85)',    // 핑크
+            'rgba(245, 158, 11, 0.85)',    // 황금색
+            'rgba(14, 165, 233, 0.85)',    // 하늘색
+            'rgba(239, 68, 68, 0.85)',     // 빨강
+            'rgba(132, 204, 22, 0.85)',    // 라임
+            'rgba(20, 184, 166, 0.85)',    // 청록색
+            'rgba(99, 102, 241, 0.85)',    // 인디고
+            'rgba(244, 114, 182, 0.85)',   // 연분홍
+            'rgba(52, 211, 153, 0.85)',    // 민트
+            'rgba(251, 191, 36, 0.85)',    // 노란색
+            'rgba(124, 58, 237, 0.85)',    // 진보라
+            'rgba(239, 154, 154, 0.85)',   // 연빨강
+            'rgba(79, 70, 229, 0.85)',     // 남색
+            'rgba(34, 197, 94, 0.85)',     // 초록
+            'rgba(249, 115, 22, 0.85)',    // 진주황
+            'rgba(217, 70, 239, 0.85)'     // 마젠타
+        ];
+
+        function getNextProductColor() {
+            if (productColorIndex < PRODUCT_BASE_COLORS.length) {
+                return PRODUCT_BASE_COLORS[productColorIndex++];
+            }
+
+            const offset = productColorIndex - PRODUCT_BASE_COLORS.length;
+            const hue = (offset * 137.5) % 360;
+            const saturation = 65 + (offset % 4) * 8;
+            const lightness = 50 + (offset % 3) * 5;
+
+            productColorIndex += 1;
+            return `hsla(${hue}, ${saturation}%, ${lightness}%, 0.85)`;
+        }
+
+        function ensureProductColors(allProducts) {
+            if (!allProducts || allProducts.length === 0) return;
+
+            const newlyAssigned = [];
+
+            allProducts.forEach(product => {
+                const productId = product.상품ID;
+                if (!productColorMap[productId]) {
+                    productColorMap[productId] = getNextProductColor();
+                    newlyAssigned.push(productId);
+                }
+            });
+
+            if (newlyAssigned.length > 0) {
+                console.log('[색상 맵] 신규 배정:', newlyAssigned.length, '개', newlyAssigned);
+            }
+        }
+
+        function getProductColor(productId) {
+            if (!productColorMap[productId]) {
+                console.warn('[색상 맵] 기존 배정 누락, 자동 생성:', productId);
+                productColorMap[productId] = getNextProductColor();
+            }
+            return productColorMap[productId];
+        }
 
         function initializeProductPerformanceDashboard() {
+            // 탭 초기화 시 색상 상태 초기화
+            productColorMap = {};
+            productColorIndex = 0;
+
             document.getElementById('product-performance-content').innerHTML = getProductPerformanceHTML();
             setupProductPerformanceListeners();
 
@@ -3909,6 +4152,9 @@
             // 날짜 프리셋 버튼
             document.querySelectorAll('.date-preset-btn[data-type="product"]').forEach(btn => {
                 btn.addEventListener('click', function() {
+                    document.querySelectorAll('.date-preset-btn[data-type="product"]').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+
                     const days = this.dataset.days;
                     const preset = this.dataset.preset;
 
@@ -3926,9 +4172,11 @@
 
             // 날짜 입력 필드 자동 적용
             document.getElementById('product-startDate').addEventListener('change', function() {
+                document.querySelectorAll('.date-preset-btn[data-type="product"]').forEach(b => b.classList.remove('active'));
                 loadProductPerformanceData();
             });
             document.getElementById('product-endDate').addEventListener('change', function() {
+                document.querySelectorAll('.date-preset-btn[data-type="product"]').forEach(b => b.classList.remove('active'));
                 loadProductPerformanceData();
             });
 
@@ -3982,47 +4230,6 @@
             }
         }
 
-        // 제품ID별 색상 맵 생성 함수
-        function generateProductColorMap(allProducts) {
-            const baseColors = [
-                'rgba(59, 130, 246, 0.85)',    // 밝은 파랑
-                'rgba(16, 185, 129, 0.85)',    // 에메랄드
-                'rgba(251, 146, 60, 0.85)',    // 주황
-                'rgba(168, 85, 247, 0.85)',    // 보라
-                'rgba(236, 72, 153, 0.85)',    // 핑크
-                'rgba(245, 158, 11, 0.85)',    // 황금색
-                'rgba(14, 165, 233, 0.85)',    // 하늘색
-                'rgba(239, 68, 68, 0.85)',     // 빨강
-                'rgba(132, 204, 22, 0.85)',    // 라임
-                'rgba(20, 184, 166, 0.85)',    // 청록색
-                'rgba(99, 102, 241, 0.85)',    // 인디고
-                'rgba(244, 114, 182, 0.85)',   // 연분홍
-                'rgba(52, 211, 153, 0.85)',    // 민트
-                'rgba(251, 191, 36, 0.85)',    // 노란색
-                'rgba(124, 58, 237, 0.85)',    // 진보라
-                'rgba(239, 154, 154, 0.85)',   // 연빨강
-                'rgba(79, 70, 229, 0.85)',     // 남색
-                'rgba(34, 197, 94, 0.85)',     // 초록
-                'rgba(249, 115, 22, 0.85)',    // 진주황
-                'rgba(217, 70, 239, 0.85)'     // 마젠타
-            ];
-
-            const colorMap = {};
-            allProducts.forEach((product, index) => {
-                const productId = product.상품ID;
-                if (index < baseColors.length) {
-                    colorMap[productId] = baseColors[index];
-                } else {
-                    // 기본 색상 이후에는 제품ID 기반 해시로 동적 생성
-                    const hue = ((index - baseColors.length) * 137.5) % 360;
-                    const saturation = 65 + (index % 4) * 8;
-                    const lightness = 50 + (index % 3) * 5;
-                    colorMap[productId] = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.85)`;
-                }
-            });
-            return colorMap;
-        }
-
         function updateProductPerformanceUI() {
             if (!productPerformanceData) return;
 
@@ -4033,11 +4240,8 @@
             let product_summary = originalData.product_summary;
             let daily_product_summary = originalData.daily_product_summary;
 
-            // 전체 제품 기반으로 색상 맵 생성 (최초 1회 또는 데이터 변경 시)
-            if (Object.keys(productColorMap).length === 0 || Object.keys(productColorMap).length !== originalData.product_summary.length) {
-                productColorMap = generateProductColorMap(originalData.product_summary);
-                console.log('[색상 맵] 생성 완료:', Object.keys(productColorMap).length, '개 제품');
-            }
+            // 전체 제품 기반으로 색상 맵 보강 (신규 제품만 배정)
+            ensureProductColors(originalData.product_summary);
 
             // 주요상품만 보기 체크 여부 확인
             const topOnlyChecked = document.getElementById('product-top-only') &&
@@ -4128,11 +4332,8 @@
             // 모든 제품 사용
             const products = product_summary;
 
-            // 색상 맵에서 각 제품의 색상 가져오기
-            const colors = products.map(product => productColorMap[product.상품ID]);
-
             // 제품별 데이터셋 생성 (누적 막대)
-            const datasets = products.map((product, index) => {
+            const datasets = products.map((product) => {
                 // 각 날짜별 해당 제품의 순매출
                 const productData = dateLabels.map(date => {
                     const found = daily_product_summary.find(
@@ -4141,11 +4342,13 @@
                     return found ? found.net_sales : 0;
                 });
 
+                const color = getProductColor(product.상품ID);
+
                 return {
                     label: product.상품명.length > 25 ? product.상품명.substring(0, 25) + '...' : product.상품명,
                     data: productData,
-                    backgroundColor: colors[index % colors.length],
-                    borderColor: colors[index % colors.length],
+                    backgroundColor: color,
+                    borderColor: color,
                     borderWidth: 0,
                     type: 'bar',
                     stack: 'stack0',
@@ -4262,8 +4465,8 @@
             // 전체 순매출 계산
             const totalNetSales = product_summary.reduce((sum, p) => sum + p.순매출, 0);
 
-            // 색상 맵에서 각 제품의 색상 가져오기
-            const colors = product_summary.map(product => productColorMap[product.상품ID]);
+            // 색상 맵에서 각 제품의 색상 가져오기 (필요 시 신규 배정)
+            const colors = product_summary.map(product => getProductColor(product.상품ID));
 
             productDistributionChart = new Chart(ctx, {
                 type: 'doughnut',
