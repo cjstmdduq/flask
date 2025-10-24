@@ -1372,7 +1372,8 @@
                     // 결제 지표 메시지 표시
                     document.getElementById('payment-metric-message').style.display = 'block';
                     document.getElementById('channel-chart-content').style.display = 'none';
-                    // 결제 지표 계산은 calculatePaymentMetrics에서 통합 처리
+                    // 전환율과 객단가 계산
+                    calculatePaymentMetrics();
                 } else {
                     // 일반 지표 선택 시
                     document.getElementById('payment-metric-message').style.display = 'none';
@@ -1681,6 +1682,7 @@
                         }
                     },
                     onClick: (event, elements) => {
+                        // 히트맵 셀 클릭
                         if (elements.length > 0) {
                             const dataIndex = elements[0].index;
                             const clickedData = heatmapPoints[dataIndex];
@@ -1695,8 +1697,9 @@
                             document.getElementById('filter-info-text').textContent = `${clickedData.weekday} ${clickedData.hourLabel}`;
                             document.getElementById('clear-filter-btn').style.display = 'block';
                             lucide.createIcons();
+                            return;
                         }
-                    }
+                    },
                 }
             });
         }
@@ -1734,14 +1737,16 @@
 
             // 히트맵 셀 선택 시 필터링
             if (selectedHeatmapCell) {
+                const { weekday, hour } = selectedHeatmapCell;
+
                 channelData = weekdayChannelData.filter(item =>
-                    item['요일'] === selectedHeatmapCell.weekday &&
-                    item['시간'] === selectedHeatmapCell.hour
+                    item['요일'] === weekday &&
+                    item['시간'] === hour
                 );
 
                 // 요일/시간 데이터가 없을 경우 시간 기준 집계로 대체
                 if (channelData.length === 0) {
-                    channelData = overallChannelData.filter(item => item['시간'] === selectedHeatmapCell.hour);
+                    channelData = overallChannelData.filter(item => item['시간'] === hour);
                 }
             }
 
@@ -2558,31 +2563,30 @@
         }
 
         function calculatePaymentMetrics() {
-            const inflowRaw = timeslotData.inflow_raw || [];
-            const salesRaw = timeslotData.sales_raw || [];
-            const totals = timeslotData.total_stats || {};
-
-            let totalCustomers = 0;
-            let totalPayers = 0;
-            let totalAmount = 0;
+            const heatmapData = (timeslotData && timeslotData.heatmap_data) ? timeslotData.heatmap_data : [];
             let filterText = '전체 기간';
 
+            let filteredData = heatmapData;
             if (selectedHeatmapCell) {
                 const { weekday, hour } = selectedHeatmapCell;
                 filterText = `${weekday} ${hour}시`;
-
-                totalCustomers = inflowRaw
-                    .filter(item => item['요일'] === weekday && item['시간'] === hour)
-                    .reduce((sum, item) => sum + (item['고객수'] || 0), 0);
-
-                const salesFiltered = salesRaw.filter(item => item['요일'] === weekday && item['시간'] === hour);
-                totalPayers = salesFiltered.reduce((sum, item) => sum + (item['결제자수'] || 0), 0);
-                totalAmount = salesFiltered.reduce((sum, item) => sum + (item['결제금액'] || 0), 0);
-            } else {
-                totalCustomers = totals.total_customers || 0;
-                totalPayers = totals.total_payers || 0;
-                totalAmount = totals.total_amount || 0;
+                filteredData = heatmapData.filter(item =>
+                    item['요일'] === weekday && item['시간'] === hour
+                );
             }
+
+            // 선택된 데이터가 없으면 전체 데이터 사용
+            if (!filteredData.length) {
+                filteredData = heatmapData;
+                filterText = '전체 기간';
+            }
+
+            const { totalCustomers, totalPayers, totalAmount } = filteredData.reduce((acc, item) => {
+                acc.totalCustomers += Number(item['고객수'] || 0);
+                acc.totalPayers += Number(item['결제자수'] || 0);
+                acc.totalAmount += Number(item['결제금액'] || 0);
+                return acc;
+            }, { totalCustomers: 0, totalPayers: 0, totalAmount: 0 });
 
             const conversionRate = totalCustomers > 0 ? ((totalPayers / totalCustomers) * 100).toFixed(2) : '0.00';
             const avgOrderValue = totalPayers > 0 ? Math.round(totalAmount / totalPayers) : 0;

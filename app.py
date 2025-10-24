@@ -691,8 +691,11 @@ def get_timeslot_data():
         if os.path.exists(sales_file):
             sales_df = pd.read_csv(sales_file, encoding='utf-8-sig')
 
-            # 결제 데이터 날짜 변환
-            sales_df['날짜'] = pd.to_datetime(sales_df['날짜'].str.rstrip('.'), format='%Y.%m.%d', errors='coerce')
+            # 결제 데이터 날짜 변환 ('.', '-' 등 다양한 구분자 대응)
+            sales_df['날짜'] = sales_df['날짜'].astype(str).str.strip()
+            sales_df['날짜'] = sales_df['날짜'].str.rstrip('.')
+            sales_df['날짜'] = sales_df['날짜'].str.replace('.', '-', regex=False)
+            sales_df['날짜'] = pd.to_datetime(sales_df['날짜'], errors='coerce')
             sales_df = sales_df.dropna(subset=['날짜'])
 
             # 날짜 필터링
